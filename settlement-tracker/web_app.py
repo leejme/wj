@@ -125,8 +125,12 @@ def import_data():
     return render_template('minimal_import.html', shops=database.SHOP_LIST)
 
 # 发货明细页面 - 使用简约模板
-@app.route('/shipping_details')
-def shipping_details():
+# NOTE:
+# Previously this route rendered a non-existing template 'minimal_shipping_details.html' and was mounted at '/shipping_details'.
+# The templates in the repo include 'minimal_shipping.html'. Many places in the app/templates expect the route to be '/shipping'.
+# To fix "导入发货明细数据之后，没有地方能看到发货明细", expose the shipping view at '/shipping' and render 'minimal_shipping.html'.
+@app.route('/shipping')
+def shipping():
     """发货明细页面"""
     shop_name = request.args.get('shop')
     start_date = request.args.get('start_date')
@@ -137,6 +141,11 @@ def shipping_details():
     
     results_df = None
     result_count = 0
+    shipping_data = []
+    total_quantity = 0
+    total_amount = 0.0
+    unique_orders = 0
+    unique_products = 0
     
     try:
         results_df = database.search_shipping_details(
@@ -154,29 +163,71 @@ def shipping_details():
         
         if results_df is not None and not results_df.empty:
             # 转换为字典列表以便在模板中显示
-            results = results_df.to_dict('records')
-            result_count = len(results)
+            shipping_data = results_df.to_dict('records')
+            result_count = len(shipping_data)
+            
+            # 计算统计信息（尽量容错）
+            if 'quantity' in results_df.columns:
+                try:
+                    total_quantity = int(results_df['quantity'].sum())
+                except:
+                    total_quantity = 0
+            else:
+                # 尝试从可能存在的列名计算或从字符串解析
+                total_quantity = 0
+            
+            if 'total_amount' in results_df.columns:
+                try:
+                    total_amount = float(results_df['total_amount'].sum())
+                except:
+                    total_amount = 0.0
+            else:
+                # 尝试用 unit_price * quantity
+                if 'unit_price' in results_df.columns and 'quantity' in results_df.columns:
+                    try:
+                        total_amount = float((results_df['unit_price'] * results_df['quantity']).sum())
+                    except:
+                        total_amount = 0.0
+            
+            # 唯一备货单数和商品种类
+            if 'stock_order_id' in results_df.columns:
+                unique_orders = int(results_df['stock_order_id'].nunique())
+            else:
+                unique_orders = 0
+            if 'product_name' in results_df.columns:
+                unique_products = int(results_df['product_name'].nunique())
+            else:
+                unique_products = 0
         else:
-            results = []
+            shipping_data = []
             result_count = 0
     
     except Exception as e:
         print(f"查询发货明细出错: {e}")
         import traceback
         traceback.print_exc()
-        results = []
+        shipping_data = []
         result_count = 0
     
-    return render_template('minimal_shipping_details.html', 
+    return render_template('minimal_shipping.html', 
                           shops=database.SHOP_LIST,
-                          results=results,
+                          shipping_data=shipping_data,
                           result_count=result_count,
                           current_shop=shop_name,
                           start_date=start_date,
                           end_date=end_date,
                           product_name=product_name,
                           spu_id=spu_id,
-                          stock_order_id=stock_order_id)
+                          stock_order_id=stock_order_id,
+                          total_quantity=total_quantity,
+                          total_amount=total_amount,
+                          unique_orders=unique_orders,
+                          unique_products=unique_products)
+
+# 保留旧路由的兼容重定向（如果有人访问 /shipping_details）
+@app.route('/shipping_details')
+def shipping_details_redirect():
+    return redirect(url_for('shipping'))
 
 # 搜索查询页面 - 使用简约模板
 @app.route('/search')

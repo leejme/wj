@@ -289,6 +289,11 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link {{ 'active' if request.path == '/shipping' else '' }}" href="/shipping">
+                            <i class="fas fa-shipping-fast me-1"></i>发货明细
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link {{ 'active' if request.path == '/products' else '' }}" href="/products">
                             <i class="fas fa-box me-1"></i>商品管理
                         </a>
