@@ -135,18 +135,15 @@ def parse_date_from_stock_id(stock_order_id):
     if not stock_order_id or not isinstance(stock_order_id, str):
         return None
     
-    # 查找日期部分（WB251016... → 251016）
+    # 查找日期部分（WB(\d{6})）
     match = re.search(r'WB(\d{6})', stock_order_id)
     if match:
         date_str = match.group(1)
         try:
-            # 解析日期格式：前2位年份，中间2位月份，后2位日期
-            # 注意：25年应该解析为2025年
             year = int("20" + date_str[:2])  # 25 → 2025
             month = int(date_str[2:4])
             day = int(date_str[4:6])
             
-            # 验证日期是否有效
             if 1 <= month <= 12 and 1 <= day <= 31:
                 return f"{year:04d}-{month:02d}-{day:02d}"
             else:
@@ -905,8 +902,8 @@ def get_products(shop_name=None, spu_id=None, product_name=None):
     conn.close()
     return df
 
-# 更新商品价格（新增）
-def update_product_price(shop_name, spu_id, sku_attribute, unit_price, cost_price):
+# 更新商品价格（新增/增强）
+def update_product_price(shop_name, spu_id, sku_attribute, unit_price, cost_price, product_name=None):
     shop_id = get_shop_id(shop_name)
     if not shop_id:
         return False
@@ -917,16 +914,16 @@ def update_product_price(shop_name, spu_id, sku_attribute, unit_price, cost_pric
         # 更新商品价格表
         conn.execute('''
         UPDATE product_prices 
-        SET unit_price = ?, cost_price = ?, update_date = CURRENT_TIMESTAMP
+        SET unit_price = ?, cost_price = ?, product_name = ?, update_date = CURRENT_TIMESTAMP
         WHERE shop_id = ? AND spu_id = ? AND sku_attribute = ?
-        ''', (unit_price, cost_price, shop_id, spu_id, sku_attribute))
+        ''', (unit_price, cost_price, product_name if product_name is not None else '', shop_id, spu_id, sku_attribute))
         
-        # 同时更新发货明细中的单价和总金额
+        # 同时更新发货明细中的单价和总金额，并同步商品名称与规格
         conn.execute('''
         UPDATE shipping_details 
-        SET unit_price = ?, total_amount = quantity * ?
+        SET unit_price = ?, total_amount = quantity * ?, product_name = ?, sku_attribute = ?
         WHERE shop_id = ? AND spu_id = ? AND sku_attribute = ?
-        ''', (unit_price, unit_price, shop_id, spu_id, sku_attribute))
+        ''', (unit_price, unit_price, product_name if product_name is not None else '', sku_attribute, shop_id, spu_id, sku_attribute))
         
         conn.commit()
         return True

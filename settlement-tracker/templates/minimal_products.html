@@ -8,7 +8,7 @@
     <div class="d-flex justify-content-between align-items-center mb-5">
         <div>
             <h1 class="h2 fw-bold mb-2">商品管理</h1>
-            <p class="text-gray-600">管理商品信息、价格及库存数据</p>
+            <p class="text-gray-600">管理商品信息、价格及库存数据（修改会同步到发货明细）</p>
         </div>
         <button class="btn btn-minimal btn-minimal-primary" data-bs-toggle="modal" data-bs-target="#addProductModal">
             <i class="fas fa-plus me-2"></i>添加商品
@@ -21,29 +21,29 @@
             <div class="row g-3">
                 <div class="col-md-4">
                     <label class="form-label">店铺筛选</label>
-                    <select class="form-select search-input">
+                    <select class="form-select search-input" id="filterShop">
                         <option value="">所有店铺</option>
                         {% for shop in shops %}
                         {% if shop != "汇总" %}
-                        <option value="{{ shop }}">{{ shop }}</option>
+                        <option value="{{ shop }}" {% if current_shop == shop %}selected{% endif %}>{{ shop }}</option>
                         {% endif %}
                         {% endfor %}
                     </select>
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">商品名称</label>
-                    <input type="text" class="form-control search-input" placeholder="输入商品名称...">
+                    <input type="text" class="form-control search-input" id="filterName" placeholder="输入商品名称...">
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">SPU ID</label>
-                    <input type="text" class="form-control search-input" placeholder="输入SPU ID...">
+                    <input type="text" class="form-control search-input" id="filterSpu" placeholder="输入SPU ID...">
                 </div>
             </div>
             <div class="d-flex justify-content-end mt-3">
-                <button class="btn btn-minimal btn-minimal-primary me-2">
+                <button class="btn btn-minimal btn-minimal-primary me-2" onclick="applyFilters()">
                     <i class="fas fa-search me-2"></i>搜索
                 </button>
-                <button class="btn btn-minimal" style="background-color: var(--gray-200); color: var(--gray-700);">
+                <button class="btn btn-minimal" style="background-color: var(--gray-200); color: var(--gray-700);" onclick="resetFilters()">
                     <i class="fas fa-redo me-2"></i>重置
                 </button>
             </div>
@@ -57,7 +57,7 @@
         </div>
         <div class="minimal-card-body">
             <div class="table-responsive">
-                <table class="minimal-table">
+                <table class="minimal-table" id="productsTable">
                     <thead>
                         <tr>
                             <th>店铺</th>
@@ -72,43 +72,50 @@
                         </tr>
                     </thead>
                     <tbody>
-                        <!-- 示例数据行 -->
-                        <tr>
-                            <td>云企</td>
-                            <td><code>SPU001</code></td>
-                            <td>
-                                <div class="d-flex align-items-center">
-                                    <div class="me-3" style="width: 40px; height: 40px; background-color: var(--gray-200); border-radius: 6px;"></div>
-                                    <div>
-                                        <div class="fw-medium">商品A</div>
-                                        <small class="text-gray-500">SKU001</small>
+                        {% if products %}
+                            {% for p in products %}
+                            <tr data-spu="{{ p.spu_id }}" data-skuattr="{{ p.sku_attribute }}" data-shop="{{ p.shop_name }}">
+                                <td>{{ p.shop_name }}</td>
+                                <td><code>{{ p.spu_id }}</code></td>
+                                <td>
+                                    <div style="max-width:320px;">
+                                        <span class="d-inline-block text-truncate" style="max-width:300px;" title="{{ p.product_name }}">
+                                            {{ p.product_name }}
+                                        </span>
                                     </div>
-                                </div>
-                            </td>
-                            <td><span class="badge-minimal" style="background-color: var(--gray-100); color: var(--gray-700);">红色/M</span></td>
-                            <td class="fw-bold text-success">¥100.00</td>
-                            <td class="text-gray-600">¥60.00</td>
-                            <td><span class="fw-medium">156</span></td>
-                            <td class="fw-bold">¥15,600.00</td>
-                            <td>
-                                <div class="d-flex gap-2">
-                                    <button class="btn btn-sm" style="background-color: rgba(37, 99, 235, 0.1); color: var(--primary-color);">
-                                        <i class="fas fa-edit"></i>
-                                    </button>
-                                    <button class="btn btn-sm" style="background-color: rgba(239, 68, 68, 0.1); color: var(--danger-color);">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                </div>
+                                </td>
+                                <td><span class="badge-minimal" style="background-color: var(--gray-100); color: var(--gray-700);">{{ p.sku_attribute }}</span></td>
+                                <td class="fw-bold text-success">¥{{ "%.2f"|format(p.unit_price if p.unit_price is not none else 0) }}</td>
+                                <td class="text-gray-600">¥{{ "%.2f"|format(p.cost_price if p.cost_price is not none else 0) }}</td>
+                                <td><span class="fw-medium">{{ p.total_sold if p.total_sold is not none else 0 }}</span></td>
+                                <td class="fw-bold">¥{{ "%.2f"|format(p.total_sales_amount if p.total_sales_amount is not none else 0) }}</td>
+                                <td>
+                                    <div class="d-flex gap-2">
+                                        <button class="btn btn-sm" style="background-color: rgba(37, 99, 235, 0.1); color: var(--primary-color);" onclick="openEditModal(this)">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="btn btn-sm" style="background-color: rgba(239, 68, 68, 0.1); color: var(--danger-color);" onclick="deleteProduct('{{ p.spu_id }}')">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                        <tr>
+                            <td colspan="9" class="text-center py-5 text-gray-500">
+                                <i class="fas fa-box-open fa-2x mb-3"></i><br>
+                                暂无商品数据
                             </td>
                         </tr>
-                        <!-- 可以添加更多行 -->
+                        {% endif %}
                     </tbody>
                 </table>
             </div>
             
-            <!-- 分页 -->
+            <!-- 分页占位 -->
             <div class="d-flex justify-content-between align-items-center mt-4">
-                <div class="text-gray-600">显示 1-10 条，共 128 条</div>
+                <div class="text-gray-600">显示 1-10 条</div>
                 <nav>
                     <ul class="pagination mb-0">
                         <li class="page-item disabled">
@@ -127,7 +134,51 @@
     </div>
 </div>
 
-<!-- 添加商品模态框 -->
+<!-- 编辑商品模态框（用于同步发货明细） -->
+<div class="modal fade" id="editProductModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">编辑商品</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editProductForm" onsubmit="submitEdit(event)">
+                    <input type="hidden" id="editShop">
+                    <div class="mb-3">
+                        <label class="form-label">SPU ID</label>
+                        <input type="text" id="editSpu" class="form-control" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">SKU 属性</label>
+                        <input type="text" id="editSkuAttr" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">商品名称</label>
+                        <input type="text" id="editName" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">销售单价 (¥)</label>
+                        <input type="number" step="0.01" id="editUnitPrice" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">成本单价 (¥)</label>
+                        <input type="number" step="0.01" id="editCostPrice" class="form-control" required>
+                    </div>
+                    <div class="form-text mb-2">
+                        修改后会自动同步到该 SPU+规格 在发货明细中的单价、总金额及商品名称 / 规格。
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-minimal" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-minimal btn-minimal-primary" onclick="submitEdit()">保存并同步</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 添加商品模态框（保留） -->
 <div class="modal fade" id="addProductModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -183,6 +234,305 @@
 
 {% block scripts %}
 <script>
-// 这里可以添加商品管理的JavaScript逻辑
+function applyFilters() {
+    const shop = document.getElementById('filterShop').value;
+    const name = document.getElementById('filterName').value;
+    const spu = document.getElementById('filterSpu').value;
+    let url = `/products?`;
+    if (shop) url += `shop=${encodeURIComponent(shop)}&`;
+    if (spu) url += `spu_id=${encodeURIComponent(spu)}&`;
+    if (name) url += `product_name=${encodeURIComponent(name)}&`;
+    window.location.href = url;
+}
+
+function resetFilters() {
+    document.getElementById('filterShop').value = '';
+    document.getElementById('filterName').value = '';
+    document.getElementById('filterSpu').value = '';
+    window.location.href = '/products';
+}
+
+// 打开编辑模态框，填充数据
+function openEditModal(btn) {
+    const tr = btn.closest('tr');
+    const spu = tr.dataset.spu || tr.querySelector('code')?.textContent;
+    const skuattr = tr.dataset.skuattr || tr.querySelector('td:nth-child(4)')?.textContent.trim();
+    const shop = tr.dataset.shop || tr.querySelector('td')?.textContent.trim();
+    const name = tr.querySelector('td:nth-child(3)')?.textContent.trim();
+    const unitPriceText = tr.querySelector('td:nth-child(5)')?.textContent.replace('¥','').trim();
+    const costPriceText = tr.querySelector('td:nth-child(6)')?.textContent.replace('¥','').trim();
+
+    document.getElementById('editSpu').value = spu || '';
+    document.getElementById('editSkuAttr').value = skuattr || '';
+    document.getElementById('editShop').value = shop || '';
+    document.getElementById('editName').value = name || '';
+    document.getElementById('editUnitPrice').value = unitPriceText || 0;
+    document.getElementById('editCostPrice').value = costPriceText || 0;
+
+    new bootstrap.Modal(document.getElementById('editProductModal')).show();
+}
+
+// 提交编辑并调用 API，同步发货明细
+function submitEdit(e) {
+    if (e) e.preventDefault();
+    const shop = document.getElementById('editShop').value;
+    const spu = document.getElementById('editSpu').value;
+    const skuattr = document.getElementById('editSkuAttr').value;
+    const name = document.getElementById('editName').value;
+    const unitPrice = parseFloat(document.getElementById('editUnitPrice').value || 0);
+    const costPrice = parseFloat(document.getElementById('editCostPrice').value || 0);
+
+    if (!shop || !spu || !skuattr) {
+        alert('缺少必要字段');
+        return;
+    }
+
+    const payload = {
+        shop_name: shop,
+        spu_id: spu,
+        sku_attribute: skuattr,
+        unit_price: unitPrice,
+        cost_price: costPrice,
+        product_name: name
+    };
+
+    fetch('/api/update_product_price', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    })
+    .then(resp => resp.json())
+    .then(data => {
+        if (data.success) {
+            // 更新表格行显示（尽量在前端同步）
+            const rows = Array.from(document.querySelectorAll('#productsTable tbody tr'));
+            for (const tr of rows) {
+                if ((tr.dataset.spu === spu && tr.dataset.skuattr === skuattr && tr.dataset.shop === shop) ||
+                    (tr.querySelector('code')?.textContent === spu && tr.querySelector('td:nth-child(4)')?.textContent.trim() === skuattr)) {
+                    tr.querySelector('td:nth-child(3) span').textContent = name.length > 60 ? name.slice(0,60)+'...' : name;
+                    tr.querySelector('td:nth-child(3) span').setAttribute('title', name);
+                    tr.querySelector('td:nth-child(5)').textContent = '¥' + unitPrice.toFixed(2);
+                    tr.querySelector('td:nth-child(6)').textContent = '¥' + costPrice.toFixed(2);
+                    break;
+                }
+            }
+
+            alert('更新成功，已同步发货明细中的单价与商品信息');
+            bootstrap.Modal.getInstance(document.getElementById('editProductModal')).hide();
+            // 也可以刷新页面以确保所有关联项一致
+            setTimeout(()=> location.reload(), 600);
+        } else {
+            alert('更新失败: ' + (data.error || JSON.stringify(data)));
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        alert('更新出错，请查看控制台');
+    });
+}
+
+function deleteProduct(spu) {
+    alert('删除功能暂未实现（演示）');
+}
+
+// 初始化页面时启用 tooltip（用于完整商品名显示）
+document.addEventListener('DOMContentLoaded', function() {
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[title]'))
+    tooltipTriggerList.forEach(function (el) {
+        // 只初始化带有 title 的元素
+        new bootstrap.Tooltip(el, {container: 'body', trigger: 'hover'});
+    })
+});
 </script>
 {% endblock %}
+```
+
+
+```html name=settlement-tracker/templates/minimal_shipping.html url=https://github.com/leejme/wj/blob/main/settlement-tracker/templates/minimal_shipping.html
+{% extends "minimal_base.html" %}
+
+{% block title %}发货明细 - 维鲸运营系统{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <!-- 页面标题和筛选 -->
+    <div class="d-flex justify-content-between align-items-center mb-5">
+        <div>
+            <h1 class="h2 fw-bold mb-2">发货明细</h1>
+            <p class="text-gray-600">查看和管理发货明细数据</p>
+        </div>
+        <div>
+            <a href="/import" class="btn btn-minimal btn-minimal-primary">
+                <i class="fas fa-plus me-2"></i>导入发货数据
+            </a>
+        </div>
+    </div>
+
+    <!-- 搜索筛选 -->
+    <div class="minimal-card mb-4">
+        <div class="minimal-card-body">
+            <form id="shippingFilterForm" action="/shipping" method="get">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label">店铺</label>
+                        <select class="form-select search-input" name="shop">
+                            <option value="">所有店铺</option>
+                            {% for shop in shops %}
+                                {% if shop != "汇总" %}
+                                <option value="{{ shop }}" {% if current_shop == shop %}selected{% endif %}>{{ shop }}</option>
+                                {% endif %}
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">备货单号</label>
+                        <input type="text" class="form-control search-input" name="stock_order_id" placeholder="WB251016..." value="{{ stock_order_id }}">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">商品名称</label>
+                        <input type="text" class="form-control search-input" name="product_name" placeholder="商品名称..." value="{{ product_name }}">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">日期范围</label>
+                        <div class="d-flex gap-2">
+                            <input type="date" class="form-control search-input mb-2" name="start_date" placeholder="开始日期" value="{{ start_date }}">
+                            <input type="date" class="form-control search-input" name="end_date" placeholder="结束日期" value="{{ end_date }}">
+                        </div>
+                    </div>
+                </div>
+                <div class="d-flex justify-content-end mt-4">
+                    <button type="button" class="btn btn-minimal me-2" style="background-color: var(--gray-200); color: var(--gray-700);" onclick="resetFilter()">
+                        <i class="fas fa-redo me-2"></i>重置
+                    </button>
+                    <button type="submit" class="btn btn-minimal btn-minimal-primary">
+                        <i class="fas fa-search me-2"></i>搜索
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 发货明细列表 -->
+    <div class="minimal-card">
+        <div class="minimal-card-header d-flex justify-content-between align-items-center">
+            <h4 class="mb-0">发货明细列表</h4>
+            <div>
+                <span class="badge bg-primary">{{ shipping_data|length }} 条记录</span>
+                {% if shipping_data|length > 0 %}
+                <button class="btn btn-sm btn-minimal ms-2" onclick="exportShippingData()">
+                    <i class="fas fa-download me-1"></i>导出
+                </button>
+                {% endif %}
+            </div>
+        </div>
+        <div class="minimal-card-body">
+            {% if shipping_data|length > 0 %}
+            <div class="table-responsive">
+                <table class="minimal-table">
+                    <thead>
+                        <tr>
+                            <th>店铺</th>
+                            <th>备货单号</th>
+                            <th>商品名称</th>
+                            <th>规格</th>
+                            <th>SPU ID</th>
+                            <th>SKU ID</th>
+                            <th>数量</th>
+                            <th>单价</th>
+                            <th>总金额</th>
+                            <th>发货日期</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in shipping_data %}
+                        <tr>
+                            <td>{{ item.shop_name }}</td>
+                            <td><code>{{ item.stock_order_id }}</code></td>
+                            <td>
+                                <!-- 长名称自动截断，鼠标悬停显示完整名称 -->
+                                <div style="max-width:340px;">
+                                    <span class="d-inline-block text-truncate" style="max-width:320px;" title="{{ item.product_name }}">
+                                        {{ item.product_name }}
+                                    </span>
+                                </div>
+                            </td>
+                            <td><span class="badge-minimal" style="background-color: var(--gray-100); color: var(--gray-700);">{{ item.sku_attribute }}</span></td>
+                            <td><small class="text-gray-500">{{ item.spu_id }}</small></td>
+                            <td><small class="text-gray-500">{{ item.sku_id }}</small></td>
+                            <td><span class="fw-medium">{{ item.quantity }}</span></td>
+                            <td class="text-gray-600">¥{{ "%.2f"|format(item.unit_price if item.unit_price is not none else 0) }}</td>
+                            <td class="fw-bold">¥{{ "%.2f"|format(item.total_amount if item.total_amount is not none else ( (item.unit_price or 0) * (item.quantity or 0) )) }}</td>
+                            <td><span class="text-gray-500">{{ item.shipping_date }}</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- 统计信息 -->
+            <div class="mt-4 pt-4 border-top">
+                <div class="row">
+                    <div class="col-md-3 mb-2">
+                        <div class="text-center p-2 border rounded">
+                            <div class="fw-bold text-primary">{{ total_quantity }}</div>
+                            <div class="text-gray-600 small">总件数</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <div class="text-center p-2 border rounded">
+                            <div class="fw-bold text-success">¥{{ "%.2f"|format(total_amount if total_amount is not none else 0) }}</div>
+                            <div class="text-gray-600 small">总金额</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <div class="text-center p-2 border rounded">
+                            <div class="fw-bold text-warning">{{ unique_orders }}</div>
+                            <div class="text-gray-600 small">备货单数</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <div class="text-center p-2 border rounded">
+                            <div class="fw-bold text-info">{{ unique_products }}</div>
+                            <div class="text-gray-600 small">商品种类</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="fas fa-shipping-fast fa-3x text-gray-300 mb-3"></i>
+                <h5 class="text-gray-500 mb-2">没有找到发货明细</h5>
+                <p class="text-gray-400 mb-4">请先导入发货数据或修改筛选条件</p>
+                <a href="/import" class="btn btn-minimal btn-minimal-primary">
+                    <i class="fas fa-upload me-2"></i>导入发货数据
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function resetFilter() {
+    document.getElementById('shippingFilterForm').reset();
+    window.location.href = '/shipping';
+}
+
+function exportShippingData() {
+    const form = document.getElementById('shippingFilterForm');
+    const params = new URLSearchParams(new FormData(form));
+    window.open(`/export/shipping?${params.toString()}`, '_blank');
+}
+
+// 启用 Bootstrap Tooltip 显示完整商品名称
+document.addEventListener('DOMContentLoaded', function() {
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[title]'))
+    tooltipTriggerList.forEach(function (el) {
+        new bootstrap.Tooltip(el, {container: 'body', trigger: 'hover'});
+    })
+});
+</script>
+{% endblock %}
+EOF

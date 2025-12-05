@@ -807,7 +807,7 @@ def search_shipping_details(shop_name=None, spu_id=None, sku_id=None, stock_orde
     conn = sqlite3.connect('settlement_system.db')
     
     query = '''
-    SELECT s.*, s.shop_name
+    SELECT s.*, sh.shop_name
     FROM shipping_details s
     JOIN shops sh ON s.shop_id = sh.id
     WHERE 1=1
@@ -887,8 +887,8 @@ def get_products(shop_name=None, spu_id=None, product_name=None):
     conn.close()
     return df
 
-# 更新商品价格
-def update_product_price(shop_name, spu_id, sku_attribute, unit_price, cost_price):
+# 更新商品价格（增强）：同时同步发货明细中的单价、总金额，以及商品名称和规格
+def update_product_price(shop_name, spu_id, sku_attribute, unit_price, cost_price, product_name=None):
     shop_id = get_shop_id(shop_name)
     if not shop_id:
         return False
@@ -896,17 +896,19 @@ def update_product_price(shop_name, spu_id, sku_attribute, unit_price, cost_pric
     conn = sqlite3.connect('settlement_system.db')
     
     try:
+        # 更新商品价格表：如果存在对应记录就更新
         conn.execute('''
         UPDATE product_prices 
-        SET unit_price = ?, cost_price = ?, update_date = CURRENT_TIMESTAMP
+        SET unit_price = ?, cost_price = ?, product_name = ?, update_date = CURRENT_TIMESTAMP
         WHERE shop_id = ? AND spu_id = ? AND sku_attribute = ?
-        ''', (unit_price, cost_price, shop_id, spu_id, sku_attribute))
+        ''', (unit_price, cost_price, product_name if product_name is not None else '', shop_id, spu_id, sku_attribute))
         
+        # 同时更新发货明细中的单价、总金额、商品名称和规格（匹配 shop_id + spu_id + sku_attribute）
         conn.execute('''
         UPDATE shipping_details 
-        SET unit_price = ?, total_amount = quantity * ?
+        SET unit_price = ?, total_amount = quantity * ?, product_name = ?, sku_attribute = ?
         WHERE shop_id = ? AND spu_id = ? AND sku_attribute = ?
-        ''', (unit_price, unit_price, shop_id, spu_id, sku_attribute))
+        ''', (unit_price, unit_price, product_name if product_name is not None else '', sku_attribute, shop_id, spu_id, sku_attribute))
         
         conn.commit()
         return True
