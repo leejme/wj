@@ -319,7 +319,7 @@ def insert_shipping_details(df, shop_name):
         print(f"店铺 '{shop_name}' 不存在")
         return 0, 0
     
-    conn = sqlite3.connect('settlement_system.db')
+    conn = _connect()
     inserted_count = 0
     skipped_count = 0
     
@@ -329,6 +329,7 @@ def insert_shipping_details(df, shop_name):
             stock_order_id = None
             quantity = 1
             
+            # 解析备货单号和数量
             if '，' in stock_order:
                 parts = stock_order.split('，')
                 if len(parts) >= 2:
@@ -355,20 +356,60 @@ def insert_shipping_details(df, shop_name):
                 skipped_count += 1
                 continue
             
-            # 获取商品价格（若已有则同步）
-            unit_price = 0
+            # **关键修改：检查并插入 product_prices（确保商品存在）**
             cursor = conn.cursor()
             cursor.execute('''
-            SELECT unit_price FROM product_prices 
+            SELECT unit_price, cost_price FROM product_prices 
             WHERE shop_id = ? AND spu_id = ? AND sku_attribute = ?
             ''', (shop_id, spu_id, sku_attribute))
+            
             price_result = cursor.fetchone()
+            
             if price_result:
-                unit_price = price_result[0]
+                # 如果商品已存在，使用商品表中的价格
+                unit_price = price_result[0] or 0
+                cost_price = price_result[1] or 0
+            else:
+                # 如果商品不存在，创建新的商品记录
+                unit_price = 0  # 默认价格
+                cost_price = 0  # 默认成本价
+                
+                # 检查是否传入价格信息（从其他列获取）
+                unit_price_col = row.get('申报价格', row.get('单价', row.get('价格', 0)))
+                if unit_price_col:
+                    try:
+                        unit_price = float(unit_price_col)
+                    except:
+                        unit_price = 0
+                
+                cost_price_col = row.get('成本单价', row.get('成本价', row.get('成本', 0)))
+                if cost_price_col:
+                    try:
+                        cost_price = float(cost_price_col)
+                    except:
+                        cost_price = 0
+                
+                # 插入新的商品记录
+                cursor.execute('''
+                INSERT OR IGNORE INTO product_prices 
+                (shop_id, spu_id, skc_id, sku_id, product_name, sku_attribute, unit_price, cost_price)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    shop_id,
+                    spu_id,
+                    skc_id,
+                    sku_id,
+                    product_name,
+                    sku_attribute,
+                    unit_price,
+                    cost_price
+                ))
+                print(f"✅ 自动创建商品记录: {product_name} ({sku_attribute})")
             
             total_amount = unit_price * quantity
             
-            conn.execute('''
+            # 插入发货明细
+            cursor.execute('''
             INSERT INTO shipping_details 
             (shop_id, spu_id, skc_id, sku_id, product_name, sku_attribute, 
              stock_order_id, quantity, unit_price, total_amount, shipping_date)
@@ -388,33 +429,12 @@ def insert_shipping_details(df, shop_name):
             ))
             inserted_count += 1
             
-            # 检查并插入 product_prices（若不存在）
-            cursor.execute('''
-            SELECT COUNT(*) FROM product_prices 
-            WHERE shop_id = ? AND spu_id = ? AND sku_attribute = ?
-            ''', (shop_id, spu_id, sku_attribute))
-            exists = cursor.fetchone()[0]
-            
-            if exists == 0:
-                conn.execute('''
-                INSERT INTO product_prices 
-                (shop_id, spu_id, skc_id, sku_id, product_name, sku_attribute, unit_price)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                ''', (
-                    shop_id,
-                    spu_id,
-                    skc_id,
-                    sku_id,
-                    product_name,
-                    sku_attribute,
-                    unit_price
-                ))
-            
         except Exception as e:
             print(f"插入发货数据出错: {e}, 行数据: {row.to_dict()}")
     
     conn.commit()
     conn.close()
+    print(f"✅ 导入完成: 新增 {inserted_count} 条发货记录")
     return inserted_count, skipped_count
 
 # 更新日汇总数据
@@ -829,23 +849,30 @@ def search_shipping_details(shop_name=None, spu_id=None, sku_id=None, stock_orde
     conn.close()
     return df
 
-# 获取商品列表（按 SPU 合并）
+# 获取商品列表
 def get_products(shop_name=None, spu_id=None, product_name=None):
-    conn = sqlite3.connect('settlement_system.db')
+    """获取商品列表，返回每个规格的详细信息（不再按SPU聚合）"""
+    conn = _connect()
     
     query = '''
     SELECT 
+        p.id,
         p.spu_id,
+        p.skc_id,
+        p.sku_id,
         p.product_name,
-        MAX(p.unit_price) AS unit_price,
-        MAX(p.cost_price) AS cost_price,
-        COUNT(DISTINCT p.sku_attribute) AS sku_count,
+        p.sku_attribute,
+        p.unit_price,
+        p.cost_price,
+        p.update_date,
         COALESCE(SUM(sd.quantity), 0) AS total_sold,
         COALESCE(SUM(sd.total_amount), 0) AS total_sales_amount,
         sh.shop_name
     FROM product_prices p
     JOIN shops sh ON p.shop_id = sh.id
-    LEFT JOIN shipping_details sd ON p.shop_id = sd.shop_id AND p.spu_id = sd.spu_id
+    LEFT JOIN shipping_details sd ON p.shop_id = sd.shop_id 
+        AND p.spu_id = sd.spu_id 
+        AND p.sku_attribute = sd.sku_attribute
     WHERE 1=1
     '''
     params = []
@@ -862,8 +889,8 @@ def get_products(shop_name=None, spu_id=None, product_name=None):
         query += " AND p.product_name LIKE ?"
         params.append(f"%{product_name}%")
     
-    query += " GROUP BY p.shop_id, p.spu_id"
-    query += " ORDER BY p.update_date DESC, sh.shop_name, p.spu_id"
+    query += " GROUP BY p.id, p.shop_id, p.spu_id, p.sku_attribute"
+    query += " ORDER BY sh.shop_name, p.spu_id, p.sku_attribute"
     
     df = pd.read_sql_query(query, conn, params=params)
     conn.close()
@@ -871,43 +898,67 @@ def get_products(shop_name=None, spu_id=None, product_name=None):
 
 # 更新商品价格（按 SPU/可选规格）：同时同步发货明细中的单价、总金额，以及商品名称和规格
 def update_product_price(shop_name, spu_id, sku_attribute, unit_price, cost_price, product_name=None):
-    """
-    如果 sku_attribute 为空字符串或 None，则将更新该 shop + spu 下的所有 sku_attribute（按 SPU 同步）。
-    否则只更新匹配的 sku_attribute（兼容旧行为）。
-    """
     shop_id = get_shop_id(shop_name)
     if not shop_id:
         return False
     
-    conn = sqlite3.connect('settlement_system.db')
+    conn = _connect()
     try:
         cursor = conn.cursor()
+        
         if sku_attribute is None or sku_attribute == '':
             # 更新所有该 SPU 的价格与名称
+            print(f"📝 正在更新 SPU {spu_id} 的所有规格...")
+            
             cursor.execute('''
             UPDATE product_prices
             SET unit_price = ?, cost_price = ?, product_name = ?, update_date = CURRENT_TIMESTAMP
             WHERE shop_id = ? AND spu_id = ?
             ''', (unit_price, cost_price, product_name if product_name is not None else '', shop_id, spu_id))
             
+            # **同步更新发货明细中所有相关记录**
             cursor.execute('''
             UPDATE shipping_details
-            SET unit_price = ?, total_amount = quantity * ?, product_name = ?
+            SET unit_price = ?, 
+                total_amount = quantity * ?, 
+                product_name = ?
             WHERE shop_id = ? AND spu_id = ?
             ''', (unit_price, unit_price, product_name if product_name is not None else '', shop_id, spu_id))
+            
+            # 获取更新数量
+            cursor.execute('''
+            SELECT COUNT(*) FROM shipping_details 
+            WHERE shop_id = ? AND spu_id = ?
+            ''', (shop_id, spu_id))
+            updated_count = cursor.fetchone()[0]
+            print(f"✅ 已同步更新 {updated_count} 条发货明细记录")
+            
         else:
             # 仅更新特定 sku_attribute
+            print(f"📝 正在更新 SPU {spu_id} 的规格 {sku_attribute}...")
+            
             cursor.execute('''
             UPDATE product_prices
             SET unit_price = ?, cost_price = ?, product_name = ?, update_date = CURRENT_TIMESTAMP
             WHERE shop_id = ? AND spu_id = ? AND sku_attribute = ?
             ''', (unit_price, cost_price, product_name if product_name is not None else '', shop_id, spu_id, sku_attribute))
             
+            # **同步更新发货明细中所有相关记录**
             cursor.execute('''
             UPDATE shipping_details
-            SET unit_price = ?, total_amount = quantity * ?, product_name = ?
+            SET unit_price = ?, 
+                total_amount = quantity * ?, 
+                product_name = ?
             WHERE shop_id = ? AND spu_id = ? AND sku_attribute = ?
             ''', (unit_price, unit_price, product_name if product_name is not None else '', shop_id, spu_id, sku_attribute))
+            
+            # 获取更新数量
+            cursor.execute('''
+            SELECT COUNT(*) FROM shipping_details 
+            WHERE shop_id = ? AND spu_id = ? AND sku_attribute = ?
+            ''', (shop_id, spu_id, sku_attribute))
+            updated_count = cursor.fetchone()[0]
+            print(f"✅ 已同步更新 {updated_count} 条发货明细记录")
         
         conn.commit()
         return True

@@ -553,6 +553,94 @@ def page_not_found(e):
 def internal_server_error(e):
     return render_template('minimal_500.html'), 500
 
+# 在 web_app.py 中添加以下代码
+
+# 同步发货明细价格API（增强版）
+@app.route('/api/sync_shipping_prices', methods=['POST'])
+def sync_shipping_prices():
+    """同步商品价格到发货明细（支持按规格同步）"""
+    try:
+        data = request.json
+        shop_name = data.get('shop_name')
+        spu_id = data.get('spu_id')
+        sku_attribute = data.get('sku_attribute')  # 新增：可选参数
+        
+        if not shop_name or not spu_id:
+            return jsonify({'error': '请提供店铺名称和SPU ID'}), 400
+        
+        # 获取所有规格的商品价格
+        conn = sqlite3.connect('settlement_system.db')
+        cursor = conn.cursor()
+        
+        # 根据是否有sku_attribute参数决定查询条件
+        if sku_attribute:
+            query = '''
+            SELECT p.sku_attribute, p.unit_price, p.product_name 
+            FROM product_prices p
+            JOIN shops s ON p.shop_id = s.id
+            WHERE s.shop_name = ? AND p.spu_id = ? AND p.sku_attribute = ?
+            '''
+            params = (shop_name, spu_id, sku_attribute)
+        else:
+            query = '''
+            SELECT p.sku_attribute, p.unit_price, p.product_name 
+            FROM product_prices p
+            JOIN shops s ON p.shop_id = s.id
+            WHERE s.shop_name = ? AND p.spu_id = ?
+            '''
+            params = (shop_name, spu_id)
+        
+        cursor.execute(query, params)
+        products = cursor.fetchall()
+        
+        if not products:
+            return jsonify({'error': '没有找到对应的商品'}), 404
+        
+        updated_count = 0
+        
+        # 更新发货明细中的价格
+        for sku_attr, unit_price, product_name in products:
+            if sku_attribute:
+                # 如果指定了具体规格，只更新该规格
+                update_query = '''
+                UPDATE shipping_details sd
+                JOIN shops s ON sd.shop_id = s.id
+                SET sd.unit_price = ?,
+                    sd.total_amount = sd.quantity * ?,
+                    sd.product_name = ?
+                WHERE s.shop_name = ? AND sd.spu_id = ? AND sd.sku_attribute = ?
+                '''
+                update_params = (unit_price, unit_price, product_name, shop_name, spu_id, sku_attr)
+            else:
+                # 如果没有指定规格，更新所有匹配的规格
+                update_query = '''
+                UPDATE shipping_details sd
+                JOIN shops s ON sd.shop_id = s.id
+                SET sd.unit_price = ?,
+                    sd.total_amount = sd.quantity * ?,
+                    sd.product_name = ?
+                WHERE s.shop_name = ? AND sd.spu_id = ? AND sd.sku_attribute = ?
+                '''
+                update_params = (unit_price, unit_price, product_name, shop_name, spu_id, sku_attr)
+            
+            cursor.execute(update_query, update_params)
+            updated_count += cursor.rowcount
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'success': True, 
+            'message': f'已同步 {updated_count} 条发货明细的价格',
+            'updated_count': updated_count,
+            'shop_name': shop_name,
+            'spu_id': spu_id,
+            'sku_attribute': sku_attribute
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 # 初始化数据库路由
 @app.route('/init_db')
 def init_db():
