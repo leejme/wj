@@ -1,0 +1,327 @@
+{% extends "minimal_base.html" %}
+
+{% block title %}搜索查询 - 维鲸运营系统{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <!-- 页面标题 -->
+    <div class="mb-5">
+        <h1 class="h2 fw-bold mb-2">搜索查询</h1>
+        <p class="text-gray-600">快速搜索订单、售后、商品、发货等信息</p>
+    </div>
+
+    <!-- 搜索类型标签 -->
+    <div class="minimal-card mb-4">
+        <div class="minimal-card-body">
+            <ul class="nav nav-tabs nav-tabs-minimal" id="searchTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="orders-tab" data-bs-toggle="tab" data-bs-target="#orders" type="button">
+                        <i class="fas fa-shopping-bag me-2"></i>订单搜索
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="afterSales-tab" data-bs-toggle="tab" data-bs-target="#afterSales" type="button">
+                        <i class="fas fa-headset me-2"></i>售后问题搜索
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="shipping-tab" data-bs-toggle="tab" data-bs-target="#shipping" type="button">
+                        <i class="fas fa-shipping-fast me-2"></i>发货明细搜索
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="products-tab" data-bs-toggle="tab" data-bs-target="#products" type="button">
+                        <i class="fas fa-box me-2"></i>商品搜索
+                    </button>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- 搜索表单区域 -->
+    <div class="tab-content">
+        <!-- 订单搜索表单 -->
+        <div class="tab-pane fade show active" id="orders" role="tabpanel">
+            <div class="minimal-card mb-4">
+                <div class="minimal-card-body">
+                    <form id="orderSearchForm" onsubmit="searchOrders(event)">
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label class="form-label">店铺</label>
+                                <select class="form-select search-input" name="shop">
+                                    <option value="">所有店铺</option>
+                                    {% for shop in shops %}
+                                        {% if shop != "汇总" %}
+                                        <option value="{{ shop }}" {% if current_shop == shop %}selected{% endif %}>{{ shop }}</option>
+                                        {% endif %}
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">备货单号</label>
+                                <input type="text" class="form-control search-input" name="keyword" placeholder="WB251016..." value="{{ current_keyword }}">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">订单编号</label>
+                                <input type="text" class="form-control search-input" name="keyword2" placeholder="ORD...">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">日期</label>
+                                <input type="date" class="form-control search-input" name="date" value="{{ current_date }}">
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-end mt-4">
+                            <button type="button" class="btn btn-minimal me-2" style="background-color: var(--gray-200); color: var(--gray-700);" onclick="resetForm('orders')">
+                                <i class="fas fa-redo me-2"></i>重置
+                            </button>
+                            <button type="submit" class="btn btn-minimal btn-minimal-primary">
+                                <i class="fas fa-search me-2"></i>搜索订单
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- 售后搜索表单 -->
+        <div class="tab-pane fade" id="afterSales" role="tabpanel">
+            <div class="minimal-card mb-4">
+                <div class="minimal-card-body">
+                    <form id="afterSalesSearchForm" onsubmit="searchAfterSales(event)">
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label class="form-label">店铺</label>
+                                <select class="form-select search-input" name="shop">
+                                    <option value="">所有店铺</option>
+                                    {% for shop in shops %}
+                                        {% if shop != "汇总" %}
+                                        <option value="{{ shop }}">{{ shop }}</option>
+                                        {% endif %}
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">违规ID</label>
+                                <input type="text" class="form-control search-input" name="keyword" placeholder="VIOL...">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">SKU ID</label>
+                                <input type="text" class="form-control search-input" name="sku_id" placeholder="SKU...">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">日期</label>
+                                <input type="date" class="form-control search-input" name="date">
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-end mt-4">
+                            <button type="button" class="btn btn-minimal me-2" style="background-color: var(--gray-200); color: var(--gray-700);" onclick="resetForm('afterSales')">
+                                <i class="fas fa-redo me-2"></i>重置
+                            </button>
+                            <button type="submit" class="btn btn-minimal btn-minimal-primary">
+                                <i class="fas fa-search me-2"></i>搜索售后问题
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- 发货明细搜索表单 -->
+        <div class="tab-pane fade" id="shipping" role="tabpanel">
+            <div class="minimal-card mb-4">
+                <div class="minimal-card-body">
+                    <form id="shippingSearchForm" onsubmit="searchShipping(event)">
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label class="form-label">店铺</label>
+                                <select class="form-select search-input" name="shop">
+                                    <option value="">所有店铺</option>
+                                    {% for shop in shops %}
+                                        {% if shop != "汇总" %}
+                                        <option value="{{ shop }}">{{ shop }}</option>
+                                        {% endif %}
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">备货单号</label>
+                                <input type="text" class="form-control search-input" name="keyword" placeholder="WB251016...">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">SPU/SKU ID</label>
+                                <input type="text" class="form-control search-input" name="product_id" placeholder="SPU...">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">日期范围</label>
+                                <input type="date" class="form-control search-input mb-2" name="start_date" placeholder="开始日期">
+                                <input type="date" class="form-control search-input" name="end_date" placeholder="结束日期">
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-end mt-4">
+                            <button type="button" class="btn btn-minimal me-2" style="background-color: var(--gray-200); color: var(--gray-700);" onclick="resetForm('shipping')">
+                                <i class="fas fa-redo me-2"></i>重置
+                            </button>
+                            <button type="submit" class="btn btn-minimal btn-minimal-primary">
+                                <i class="fas fa-search me-2"></i>搜索发货明细
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- 商品搜索表单 -->
+        <div class="tab-pane fade" id="products" role="tabpanel">
+            <div class="minimal-card mb-4">
+                <div class="minimal-card-body">
+                    <form id="productSearchForm" onsubmit="searchProducts(event)">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label">店铺</label>
+                                <select class="form-select search-input" name="shop">
+                                    <option value="">所有店铺</option>
+                                    {% for shop in shops %}
+                                        {% if shop != "汇总" %}
+                                        <option value="{{ shop }}">{{ shop }}</option>
+                                        {% endif %}
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">SPU ID</label>
+                                <input type="text" class="form-control search-input" name="spu_id" placeholder="SPU...">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">商品名称</label>
+                                <input type="text" class="form-control search-input" name="product_name" placeholder="商品名称...">
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-end mt-4">
+                            <button type="button" class="btn btn-minimal me-2" style="background-color: var(--gray-200); color: var(--gray-700);" onclick="resetForm('products')">
+                                <i class="fas fa-redo me-2"></i>重置
+                            </button>
+                            <button type="submit" class="btn btn-minimal btn-minimal-primary">
+                                <i class="fas fa-search me-2"></i>搜索商品
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 搜索结果 -->
+    {% if results is not none %}
+    <div class="minimal-card mt-4">
+        <div class="minimal-card-header d-flex justify-content-between align-items-center">
+            <h4 class="mb-0">搜索结果</h4>
+            <div>
+                <span class="badge bg-primary">{{ result_count }} 条记录</span>
+                {% if result_count > 0 %}
+                <button class="btn btn-sm btn-minimal ms-2" onclick="exportResults()">
+                    <i class="fas fa-download me-1"></i>导出
+                </button>
+                {% endif %}
+            </div>
+        </div>
+        <div class="minimal-card-body">
+            {% if result_count > 0 %}
+            <div class="table-responsive">
+                <table class="minimal-table">
+                    <thead>
+                        {% if search_type == 'orders' %}
+                        <tr>
+                            <th>店铺</th>
+                            <th>订单编号</th>
+                            <th>备货单号</th>
+                            <th>SKU ID</th>
+                            <th>金额</th>
+                            <th>交易类型</th>
+                            <th>日期</th>
+                        </tr>
+                        {% elif search_type == 'after_sales' %}
+                        <tr>
+                            <th>店铺</th>
+                            <th>违规ID</th>
+                            <th>SKU ID</th>
+                            <th>赔付金额</th>
+                            <th>日期</th>
+                        </tr>
+                        {% elif search_type == 'shipping' %}
+                        <tr>
+                            <th>店铺</th>
+                            <th>备货单号</th>
+                            <th>商品名称</th>
+                            <th>规格</th>
+                            <th>数量</th>
+                            <th>总金额</th>
+                            <th>发货日期</th>
+                        </tr>
+                        {% elif search_type == 'products' %}
+                        <tr>
+                            <th>店铺</th>
+                            <th>SPU ID</th>
+                            <th>商品名称</th>
+                            <th>规格</th>
+                            <th>销售单价</th>
+                            <th>成本单价</th>
+                            <th>已售数量</th>
+                        </tr>
+                        {% endif %}
+                    </thead>
+                    <tbody>
+                        <!-- 这里应该动态显示结果 -->
+                        <tr>
+                            <td colspan="7" class="text-center py-5 text-gray-500">
+                                <i class="fas fa-search fa-2x mb-3"></i><br>
+                                后端搜索功能正在开发中...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="fas fa-search fa-3x text-gray-300 mb-3"></i>
+                <h5 class="text-gray-500 mb-2">没有找到匹配的记录</h5>
+                <p class="text-gray-400">请尝试修改搜索条件</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function resetForm(formType) {
+    document.getElementById(formType + 'SearchForm').reset();
+}
+
+function searchOrders(e) {
+    e.preventDefault();
+    alert('订单搜索功能正在开发中...');
+}
+
+function searchAfterSales(e) {
+    e.preventDefault();
+    alert('售后搜索功能正在开发中...');
+}
+
+function searchShipping(e) {
+    e.preventDefault();
+    alert('发货搜索功能正在开发中...');
+}
+
+function searchProducts(e) {
+    e.preventDefault();
+    alert('商品搜索功能正在开发中...');
+}
+
+function exportResults() {
+    alert('导出功能正在开发中...');
+}
+</script>
+{% endblock %}
+EOF

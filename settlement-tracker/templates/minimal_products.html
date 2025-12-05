@@ -1,0 +1,188 @@
+{% extends "minimal_base.html" %}
+
+{% block title %}商品管理 - 维鲸运营系统{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <!-- 页面标题 -->
+    <div class="d-flex justify-content-between align-items-center mb-5">
+        <div>
+            <h1 class="h2 fw-bold mb-2">商品管理</h1>
+            <p class="text-gray-600">管理商品信息、价格及库存数据</p>
+        </div>
+        <button class="btn btn-minimal btn-minimal-primary" data-bs-toggle="modal" data-bs-target="#addProductModal">
+            <i class="fas fa-plus me-2"></i>添加商品
+        </button>
+    </div>
+
+    <!-- 搜索和筛选 -->
+    <div class="minimal-card mb-4">
+        <div class="minimal-card-body">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">店铺筛选</label>
+                    <select class="form-select search-input">
+                        <option value="">所有店铺</option>
+                        {% for shop in shops %}
+                        {% if shop != "汇总" %}
+                        <option value="{{ shop }}">{{ shop }}</option>
+                        {% endif %}
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">商品名称</label>
+                    <input type="text" class="form-control search-input" placeholder="输入商品名称...">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">SPU ID</label>
+                    <input type="text" class="form-control search-input" placeholder="输入SPU ID...">
+                </div>
+            </div>
+            <div class="d-flex justify-content-end mt-3">
+                <button class="btn btn-minimal btn-minimal-primary me-2">
+                    <i class="fas fa-search me-2"></i>搜索
+                </button>
+                <button class="btn btn-minimal" style="background-color: var(--gray-200); color: var(--gray-700);">
+                    <i class="fas fa-redo me-2"></i>重置
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 商品列表 -->
+    <div class="minimal-card">
+        <div class="minimal-card-header">
+            <h4 class="mb-0">商品列表</h4>
+        </div>
+        <div class="minimal-card-body">
+            <div class="table-responsive">
+                <table class="minimal-table">
+                    <thead>
+                        <tr>
+                            <th>店铺</th>
+                            <th>SPU ID</th>
+                            <th>商品名称</th>
+                            <th>规格</th>
+                            <th>销售单价</th>
+                            <th>成本单价</th>
+                            <th>已售数量</th>
+                            <th>销售额</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- 示例数据行 -->
+                        <tr>
+                            <td>云企</td>
+                            <td><code>SPU001</code></td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <div class="me-3" style="width: 40px; height: 40px; background-color: var(--gray-200); border-radius: 6px;"></div>
+                                    <div>
+                                        <div class="fw-medium">商品A</div>
+                                        <small class="text-gray-500">SKU001</small>
+                                    </div>
+                                </div>
+                            </td>
+                            <td><span class="badge-minimal" style="background-color: var(--gray-100); color: var(--gray-700);">红色/M</span></td>
+                            <td class="fw-bold text-success">¥100.00</td>
+                            <td class="text-gray-600">¥60.00</td>
+                            <td><span class="fw-medium">156</span></td>
+                            <td class="fw-bold">¥15,600.00</td>
+                            <td>
+                                <div class="d-flex gap-2">
+                                    <button class="btn btn-sm" style="background-color: rgba(37, 99, 235, 0.1); color: var(--primary-color);">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="btn btn-sm" style="background-color: rgba(239, 68, 68, 0.1); color: var(--danger-color);">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        <!-- 可以添加更多行 -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- 分页 -->
+            <div class="d-flex justify-content-between align-items-center mt-4">
+                <div class="text-gray-600">显示 1-10 条，共 128 条</div>
+                <nav>
+                    <ul class="pagination mb-0">
+                        <li class="page-item disabled">
+                            <a class="page-link" href="#" tabindex="-1">上一页</a>
+                        </li>
+                        <li class="page-item active"><a class="page-link" href="#">1</a></li>
+                        <li class="page-item"><a class="page-link" href="#">2</a></li>
+                        <li class="page-item"><a class="page-link" href="#">3</a></li>
+                        <li class="page-item">
+                            <a class="page-link" href="#">下一页</a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 添加商品模态框 -->
+<div class="modal fade" id="addProductModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">添加新商品</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">店铺</label>
+                            <select class="form-select" required>
+                                <option value="">选择店铺</option>
+                                {% for shop in shops %}
+                                {% if shop != "汇总" %}
+                                <option value="{{ shop }}">{{ shop }}</option>
+                                {% endif %}
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">SPU ID</label>
+                            <input type="text" class="form-control" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">商品名称</label>
+                            <input type="text" class="form-control" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">规格</label>
+                            <input type="text" class="form-control" placeholder="例如：红色/M" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">销售单价</label>
+                            <input type="number" class="form-control" step="0.01" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">成本单价</label>
+                            <input type="number" class="form-control" step="0.01" required>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-minimal" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-minimal btn-minimal-primary">保存商品</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 这里可以添加商品管理的JavaScript逻辑
+</script>
+{% endblock %}

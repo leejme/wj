@@ -1,0 +1,224 @@
+cat > templates/index.html << 'EOF'
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>维鲸运营系统</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        body { background-color: #f8f9fa; }
+        .navbar-brand { font-weight: bold; color: #0d6efd !important; }
+        .card { border-radius: 10px; border: none; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .card-header { background-color: #0d6efd; color: white; font-weight: bold; }
+        .feature-icon { font-size: 2rem; color: #0d6efd; }
+        .btn-feature { transition: all 0.3s; }
+        .btn-feature:hover { transform: translateY(-3px); }
+    </style>
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                🐋 维鲸运营系统
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/">首页</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/dashboard">数据看板</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/import">导入数据</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/search">搜索查询</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 主内容 -->
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h4 class="mb-0">📊 系统概览</h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <div class="text-center p-3">
+                                    <div class="feature-icon">🏪</div>
+                                    <h5>店铺数量</h5>
+                                    <h3>10</h3>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="text-center p-3">
+                                    <div class="feature-icon">💰</div>
+                                    <h5>今日销售额</h5>
+                                    <h3>¥0.00</h3>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="text-center p-3">
+                                    <div class="feature-icon">📦</div>
+                                    <h5>发货订单</h5>
+                                    <h3>0</h3>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="text-center p-3">
+                                    <div class="feature-icon">🔄</div>
+                                    <h5>结款率</h5>
+                                    <h3>0%</h3>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 功能卡片 -->
+        <div class="row">
+            <div class="col-md-4 mb-4">
+                <div class="card h-100">
+                    <div class="card-header bg-primary text-white">
+                        📥 数据导入
+                    </div>
+                    <div class="card-body">
+                        <p class="card-text">导入交易结算、售后问题、发货明细等数据</p>
+                        <div class="d-grid gap-2">
+                            <a href="/import" class="btn btn-primary btn-feature">开始导入</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4 mb-4">
+                <div class="card h-100">
+                    <div class="card-header bg-success text-white">
+                        📊 数据看板
+                    </div>
+                    <div class="card-body">
+                        <p class="card-text">查看日汇总、月度汇总、多店铺对比分析</p>
+                        <div class="d-grid gap-2">
+                            <a href="/dashboard" class="btn btn-success btn-feature">查看看板</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4 mb-4">
+                <div class="card h-100">
+                    <div class="card-header bg-info text-white">
+                        🔍 搜索查询
+                    </div>
+                    <div class="card-body">
+                        <p class="card-text">搜索订单、售后问题、商品信息等</p>
+                        <div class="d-grid gap-2">
+                            <a href="/search" class="btn btn-info btn-feature">开始搜索</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 店铺列表 -->
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        🏪 支持的店铺
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3 mb-2">
+                                <div class="d-flex align-items-center p-2 border rounded">
+                                    <span class="me-2">🏬</span>
+                                    <span>云企</span>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-2">
+                                <div class="d-flex align-items-center p-2 border rounded">
+                                    <span class="me-2">🏬</span>
+                                    <span>鲸画</span>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-2">
+                                <div class="d-flex align-items-center p-2 border rounded">
+                                    <span class="me-2">🏬</span>
+                                    <span>知己知彼</span>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-2">
+                                <div class="d-flex align-items-center p-2 border rounded">
+                                    <span class="me-2">🏬</span>
+                                    <span>鼎银</span>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-2">
+                                <div class="d-flex align-items-center p-2 border rounded">
+                                    <span class="me-2">🏬</span>
+                                    <span>德勤</span>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-2">
+                                <div class="d-flex align-items-center p-2 border rounded">
+                                    <span class="me-2">🏬</span>
+                                    <span>淘小铺</span>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-2">
+                                <div class="d-flex align-items-center p-2 border rounded">
+                                    <span class="me-2">🏬</span>
+                                    <span>维鲸</span>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-2">
+                                <div class="d-flex align-items-center p-2 border rounded">
+                                    <span class="me-2">🏬</span>
+                                    <span>点小饿</span>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-2">
+                                <div class="d-flex align-items-center p-2 border rounded">
+                                    <span class="me-2">🏬</span>
+                                    <span>扶风</span>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-2">
+                                <div class="d-flex align-items-center p-2 border rounded">
+                                    <span class="me-2">🏬</span>
+                                    <span>汇总</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 页脚 -->
+    <footer class="bg-dark text-white mt-5 py-4">
+        <div class="container text-center">
+            <p class="mb-0">🐋 维鲸运营系统 &copy; 2025</p>
+            <p class="mb-0">粗制滥造：一条鱼</p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
+EOF

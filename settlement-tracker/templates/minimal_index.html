@@ -1,0 +1,133 @@
+{% extends "minimal_base.html" %}
+
+{% block title %}首页 - 维鲸运营系统{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <!-- 欢迎区域 -->
+    <div class="row mb-5">
+        <div class="col-lg-8">
+            <h1 class="display-5 fw-bold mb-3">维鲸运营系统</h1>
+            <p class="lead text-gray-600 mb-4">
+                一站式店铺运营管理平台，提供数据导入、分析、查询全流程解决方案
+            </p>
+            <div class="d-flex gap-3">
+                <a href="/import" class="btn btn-minimal btn-minimal-primary">
+                    <i class="fas fa-upload me-2"></i>开始导入数据
+                </a>
+                <a href="/dashboard" class="btn btn-minimal" style="background-color: var(--gray-200); color: var(--gray-700);">
+                    <i class="fas fa-chart-line me-2"></i>查看看板
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- 统计数据卡片 -->
+    <div class="row mb-5">
+        <div class="col-md-3 mb-4">
+            <div class="stat-card">
+                <div class="stat-icon sales">
+                    <i class="fas fa-shopping-bag fa-lg"></i>
+                </div>
+                <div class="stat-value sales">¥0.00</div>
+                <div class="stat-label">今日销售额</div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-4">
+            <div class="stat-card">
+                <div class="stat-icon refunds">
+                    <i class="fas fa-exchange-alt fa-lg"></i>
+                </div>
+                <div class="stat-value refunds">¥0.00</div>
+                <div class="stat-label">今日退款额</div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-4">
+            <div class="stat-card">
+                <div class="stat-icon subsidies">
+                    <i class="fas fa-hand-holding-usd fa-lg"></i>
+                </div>
+                <div class="stat-value subsidies">¥0.00</div>
+                <div class="stat-label">今日补贴额</div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-4">
+            <div class="stat-card">
+                <div class="stat-icon after-sales">
+                    <i class="fas fa-headset fa-lg"></i>
+                </div>
+                <div class="stat-value after-sales">¥0.00</div>
+                <div class="stat-label">售后赔付额</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 功能卡片 -->
+    <h3 class="mb-4">核心功能</h3>
+    <div class="row mb-5">
+        <div class="col-md-4 mb-4">
+            <div class="minimal-card h-100">
+                <div class="minimal-card-body">
+                    <div class="mb-3" style="width: 48px; height: 48px; background-color: rgba(37, 99, 235, 0.1); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+                        <i class="fas fa-file-import text-primary"></i>
+                    </div>
+                    <h5 class="mb-2">数据导入</h5>
+                    <p class="text-gray-600 mb-3">支持交易结算、售后问题、发货明细等多种数据格式一键导入</p>
+                    <a href="/import" class="text-primary text-decoration-none fw-medium">开始使用 →</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-4">
+            <div class="minimal-card h-100">
+                <div class="minimal-card-body">
+                    <div class="mb-3" style="width: 48px; height: 48px; background-color: rgba(16, 185, 129, 0.1); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+                        <i class="fas fa-chart-bar text-success"></i>
+                    </div>
+                    <h5 class="mb-2">数据分析</h5>
+                    <p class="text-gray-600 mb-3">实时数据看板，多维度对比分析，洞察经营状况</p>
+                    <a href="/dashboard" class="text-success text-decoration-none fw-medium">查看分析 →</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-4">
+            <div class="minimal-card h-100">
+                <div class="minimal-card-body">
+                    <div class="mb-3" style="width: 48px; height: 48px; background-color: rgba(245, 158, 11, 0.1); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+                        <i class="fas fa-search text-warning"></i>
+                    </div>
+                    <h5 class="mb-2">智能搜索</h5>
+                    <p class="text-gray-600 mb-3">订单、售后、商品等多维度精准搜索，快速定位目标数据</p>
+                    <a href="/search" class="text-warning text-decoration-none fw-medium">开始搜索 →</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 支持的店铺 -->
+    <div class="row">
+        <div class="col-12">
+            <div class="minimal-card">
+                <div class="minimal-card-header">
+                    <h4 class="mb-0">支持的店铺</h4>
+                </div>
+                <div class="minimal-card-body">
+                    <div class="row">
+                        {% for shop in shops %}
+                        {% if shop != "汇总" %}
+                        <div class="col-md-3 col-6 mb-3">
+                            <div class="d-flex align-items-center p-3 border rounded" style="border-color: var(--gray-200);">
+                                <div class="me-3" style="width: 32px; height: 32px; background-color: var(--gray-100); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                                    <i class="fas fa-store text-gray-500"></i>
+                                </div>
+                                <span class="fw-medium">{{ shop }}</span>
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

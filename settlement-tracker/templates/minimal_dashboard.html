@@ -1,0 +1,181 @@
+{% extends "minimal_base.html" %}
+
+{% block title %}数据看板 - 维鲸运营系统{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <!-- 页面标题和筛选 -->
+    <div class="d-flex justify-content-between align-items-center mb-5">
+        <div>
+            <h1 class="h2 fw-bold mb-2">数据看板</h1>
+            <p class="text-gray-600">查看今日汇总数据及各店铺表现</p>
+        </div>
+        <div class="d-flex gap-2">
+            <input type="date" class="form-control search-input" id="dateSelect" value="{{ today }}" style="width: 180px;">
+            <button class="btn btn-minimal btn-minimal-primary" onclick="loadDashboardData()">
+                <i class="fas fa-search me-2"></i>查询
+            </button>
+        </div>
+    </div>
+
+    <!-- 今日统计数据 -->
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="stat-card">
+                <div class="stat-icon sales">
+                    <i class="fas fa-money-bill-wave fa-lg"></i>
+                </div>
+                <div class="stat-value sales">¥{{ "%.2f"|format(all_shops_data.summary.total_sales) }}</div>
+                <div class="stat-label">今日销售总额</div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="stat-card">
+                <div class="stat-icon refunds">
+                    <i class="fas fa-exchange-alt fa-lg"></i>
+                </div>
+                <div class="stat-value refunds">¥{{ "%.2f"|format(all_shops_data.summary.total_refunds) }}</div>
+                <div class="stat-label">今日退款总额</div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="stat-card">
+                <div class="stat-icon subsidies">
+                    <i class="fas fa-hand-holding-usd fa-lg"></i>
+                </div>
+                <div class="stat-value subsidies">¥{{ "%.2f"|format(all_shops_data.summary.total_subsidies) }}</div>
+                <div class="stat-label">今日补贴总额</div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="stat-card">
+                <div class="stat-icon after-sales">
+                    <i class="fas fa-headset fa-lg"></i>
+                </div>
+                <div class="stat-value after-sales">¥{{ "%.2f"|format(all_shops_data.summary.total_after_sales) }}</div>
+                <div class="stat-label">今日售后赔付</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 各店铺数据表格 -->
+    <div class="minimal-card mb-4">
+        <div class="minimal-card-header">
+            <h4 class="mb-0">🏪 各店铺数据汇总 - {{ today }}</h4>
+        </div>
+        <div class="minimal-card-body">
+            <div class="table-responsive">
+                <table class="minimal-table">
+                    <thead>
+                        <tr>
+                            <th>店铺名称</th>
+                            <th>销售回款</th>
+                            <th>销售冲回</th>
+                            <th>非商责补贴</th>
+                            <th>售后赔付</th>
+                            <th>净收入</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if all_shops_data.shops %}
+                            {% for shop in all_shops_data.shops %}
+                            <tr>
+                                <td><strong>{{ shop.shop_name }}</strong></td>
+                                <td class="sales">¥{{ "%.2f"|format(shop.total_sales) }}</td>
+                                <td class="refunds">¥{{ "%.2f"|format(shop.total_refunds) }}</td>
+                                <td class="subsidies">¥{{ "%.2f"|format(shop.total_subsidies) }}</td>
+                                <td class="after-sales">¥{{ "%.2f"|format(shop.total_after_sales) }}</td>
+                                <td>
+                                    {% set net = shop.total_sales + shop.total_subsidies - shop.total_refunds - shop.total_after_sales %}
+                                    {% if net >= 0 %}
+                                        <span class="sales fw-bold">¥{{ "%.2f"|format(net) }}</span>
+                                    {% else %}
+                                        <span class="refunds fw-bold">¥{{ "%.2f"|format(net) }}</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                            <!-- 汇总行 -->
+                            <tr class="table-active">
+                                <td><strong>汇总</strong></td>
+                                <td><strong class="sales">¥{{ "%.2f"|format(all_shops_data.summary.total_sales) }}</strong></td>
+                                <td><strong class="refunds">¥{{ "%.2f"|format(all_shops_data.summary.total_refunds) }}</strong></td>
+                                <td><strong class="subsidies">¥{{ "%.2f"|format(all_shops_data.summary.total_subsidies) }}</strong></td>
+                                <td><strong class="after-sales">¥{{ "%.2f"|format(all_shops_data.summary.total_after_sales) }}</strong></td>
+                                <td>
+                                    {% set total_net = all_shops_data.summary.total_sales + all_shops_data.summary.total_subsidies - all_shops_data.summary.total_refunds - all_shops_data.summary.total_after_sales %}
+                                    {% if total_net >= 0 %}
+                                        <strong class="sales">¥{{ "%.2f"|format(total_net) }}</strong>
+                                    {% else %}
+                                        <strong class="refunds">¥{{ "%.2f"|format(total_net) }}</strong>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% else %}
+                            <tr>
+                                <td colspan="6" class="text-center py-4">
+                                    <i class="fas fa-inbox fa-2x text-gray-300 mb-3"></i>
+                                    <p class="text-gray-500">暂无数据，请先导入数据</p>
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 图表区域（占位） -->
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="minimal-card">
+                <div class="minimal-card-header">
+                    <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i>销售趋势图</h5>
+                </div>
+                <div class="minimal-card-body">
+                    <div style="height: 300px; background-color: var(--gray-50); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: var(--gray-400);">
+                        <div class="text-center">
+                            <i class="fas fa-chart-bar fa-3x mb-3"></i>
+                            <p>销售趋势图（待开发）</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="minimal-card">
+                <div class="minimal-card-header">
+                    <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>店铺占比图</h5>
+                </div>
+                <div class="minimal-card-body">
+                    <div style="height: 300px; background-color: var(--gray-50); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: var(--gray-400);">
+                        <div class="text-center">
+                            <i class="fas fa-chart-pie fa-3x mb-3"></i>
+                            <p>店铺占比图（待开发）</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function loadDashboardData() {
+    const date = document.getElementById('dateSelect').value;
+    window.location.href = `/dashboard?date=${date}`;
+}
+
+// 页面加载时初始化
+document.addEventListener('DOMContentLoaded', function() {
+    const dateInput = document.getElementById('dateSelect');
+    if (!dateInput.value) {
+        const today = new Date().toISOString().split('T')[0];
+        dateInput.value = today;
+    }
+});
+</script>
+{% endblock %}
+EOF

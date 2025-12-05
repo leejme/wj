@@ -1,0 +1,190 @@
+{% extends "minimal_base.html" %}
+
+{% block title %}月度汇总 - 维鲸运营系统{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <!-- 页面标题和筛选 -->
+    <div class="d-flex justify-content-between align-items-center mb-5">
+        <div>
+            <h1 class="h2 fw-bold mb-2">月度汇总</h1>
+            <p class="text-gray-600">查看月度详细数据统计</p>
+        </div>
+        <div class="d-flex gap-2">
+            <select class="form-select search-input" id="shopSelect" style="width: 150px;">
+                <option value="">所有店铺</option>
+                {% for shop in shops %}
+                    {% if shop != "汇总" %}
+                    <option value="{{ shop }}" {% if current_shop == shop %}selected{% endif %}>{{ shop }}</option>
+                    {% endif %}
+                {% endfor %}
+            </select>
+            <input type="number" class="form-control search-input" id="yearSelect" placeholder="年份" value="{{ current_year }}" style="width: 120px;">
+            <select class="form-select search-input" id="monthSelect" style="width: 120px;">
+                <option value="1" {% if current_month == "1" %}selected{% endif %}>1月</option>
+                <option value="2" {% if current_month == "2" %}selected{% endif %}>2月</option>
+                <option value="3" {% if current_month == "3" %}selected{% endif %}>3月</option>
+                <option value="4" {% if current_month == "4" %}selected{% endif %}>4月</option>
+                <option value="5" {% if current_month == "5" %}selected{% endif %}>5月</option>
+                <option value="6" {% if current_month == "6" %}selected{% endif %}>6月</option>
+                <option value="7" {% if current_month == "7" %}selected{% endif %}>7月</option>
+                <option value="8" {% if current_month == "8" %}selected{% endif %}>8月</option>
+                <option value="9" {% if current_month == "9" %}selected{% endif %}>9月</option>
+                <option value="10" {% if current_month == "10" %}selected{% endif %}>10月</option>
+                <option value="11" {% if current_month == "11" %}selected{% endif %}>11月</option>
+                <option value="12" {% if current_month == "12" %}selected{% endif %}>12月</option>
+            </select>
+            <button class="btn btn-minimal btn-minimal-primary" onclick="loadMonthlyData()">
+                <i class="fas fa-search me-2"></i>查询
+            </button>
+        </div>
+    </div>
+
+    <!-- 月度统计数据 -->
+    {% if summary %}
+    <div class="minimal-card mb-4">
+        <div class="minimal-card-header">
+            <h4 class="mb-0">📊 {{ current_shop }} - {{ summary.month }} 月度汇总</h4>
+        </div>
+        <div class="minimal-card-body">
+            <!-- 月度统计卡片 -->
+            <div class="row mb-4">
+                <div class="col-md-3 mb-3">
+                    <div class="stat-card">
+                        <div class="stat-icon sales">
+                            <i class="fas fa-money-bill-wave fa-lg"></i>
+                        </div>
+                        <div class="stat-value sales">¥{{ "%.2f"|format(summary.monthly_totals.sales) }}</div>
+                        <div class="stat-label">销售回款总额</div>
+                        <div class="stat-subtext">{{ summary.monthly_totals.total_sales_count }} 笔</div>
+                    </div>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <div class="stat-card">
+                        <div class="stat-icon refunds">
+                            <i class="fas fa-exchange-alt fa-lg"></i>
+                        </div>
+                        <div class="stat-value refunds">¥{{ "%.2f"|format(summary.monthly_totals.refunds) }}</div>
+                        <div class="stat-label">销售冲回总额</div>
+                        <div class="stat-subtext">{{ summary.monthly_totals.total_refunds_count }} 笔</div>
+                    </div>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <div class="stat-card">
+                        <div class="stat-icon subsidies">
+                            <i class="fas fa-hand-holding-usd fa-lg"></i>
+                        </div>
+                        <div class="stat-value subsidies">¥{{ "%.2f"|format(summary.monthly_totals.subsidies) }}</div>
+                        <div class="stat-label">非商责补贴总额</div>
+                        <div class="stat-subtext">{{ summary.monthly_totals.total_subsidies_count }} 笔</div>
+                    </div>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <div class="stat-card">
+                        <div class="stat-icon after-sales">
+                            <i class="fas fa-headset fa-lg"></i>
+                        </div>
+                        <div class="stat-value after-sales">¥{{ "%.2f"|format(summary.monthly_totals.after_sales) }}</div>
+                        <div class="stat-label">售后赔付总额</div>
+                        <div class="stat-subtext">{{ summary.monthly_totals.total_after_sales_count }} 笔</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 月度净收入 -->
+            <div class="alert alert-info mb-4">
+                <div class="d-flex align-items-center">
+                    <i class="fas fa-calculator fa-2x me-3"></i>
+                    <div>
+                        <h5 class="mb-1">月度净收入统计</h5>
+                        {% set total_income = summary.monthly_totals.sales + summary.monthly_totals.subsidies %}
+                        {% set total_expense = summary.monthly_totals.refunds + summary.monthly_totals.after_sales %}
+                        {% set net_income = total_income - total_expense %}
+                        <p class="mb-0">
+                            总收入: <strong class="sales">¥{{ "%.2f"|format(total_income) }}</strong> 
+                            | 总支出: <strong class="refunds">¥{{ "%.2f"|format(total_expense) }}</strong> 
+                            | 净收入: <strong class="{% if net_income >= 0 %}sales{% else %}refunds{% endif %}">¥{{ "%.2f"|format(net_income) }}</strong>
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 每日明细表格 -->
+            <h5 class="mb-3">📅 每日明细</h5>
+            <div class="table-responsive">
+                <table class="minimal-table">
+                    <thead>
+                        <tr>
+                            <th>日期</th>
+                            <th>销售回款</th>
+                            <th>销售冲回</th>
+                            <th>非商责补贴</th>
+                            <th>售后赔付</th>
+                            <th>销售单数</th>
+                            <th>退款单数</th>
+                            <th>日净收入</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for day in summary.daily_data %}
+                        <tr>
+                            <td>{{ day.date }}</td>
+                            <td class="sales fw-medium">¥{{ "%.2f"|format(day.sales) }}</td>
+                            <td class="refunds fw-medium">¥{{ "%.2f"|format(day.refunds) }}</td>
+                            <td class="subsidies fw-medium">¥{{ "%.2f"|format(day.subsidies) }}</td>
+                            <td class="after-sales fw-medium">¥{{ "%.2f"|format(day.after_sales) }}</td>
+                            <td>{{ day.sales_count }}</td>
+                            <td>{{ day.refunds_count }}</td>
+                            <td class="fw-bold {% if (day.sales + day.subsidies - day.refunds - day.after_sales) >= 0 %}sales{% else %}refunds{% endif %}">
+                                ¥{{ "%.2f"|format(day.sales + day.subsidies - day.refunds - day.after_sales) }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="text-center py-5">
+        <i class="fas fa-calendar-alt fa-3x text-gray-300 mb-3"></i>
+        <h5 class="text-gray-500 mb-2">没有找到月度数据</h5>
+        <p class="text-gray-400">请选择店铺和月份进行查询</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function loadMonthlyData() {
+    const shop = document.getElementById('shopSelect').value;
+    const year = document.getElementById('yearSelect').value;
+    const month = document.getElementById('monthSelect').value;
+    
+    if (!shop) {
+        alert('请选择店铺');
+        return;
+    }
+    
+    if (!year || !month) {
+        alert('请选择年份和月份');
+        return;
+    }
+    
+    window.location.href = `/monthly?shop=${shop}&year=${year}&month=${month}`;
+}
+
+// 页面加载时初始化日期
+document.addEventListener('DOMContentLoaded', function() {
+    const today = new Date();
+    if (!document.getElementById('yearSelect').value) {
+        document.getElementById('yearSelect').value = today.getFullYear();
+    }
+    if (!document.getElementById('monthSelect').value) {
+        document.getElementById('monthSelect').value = today.getMonth() + 1;
+    }
+});
+</script>
+{% endblock %}
+EOF

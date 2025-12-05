@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>导入数据 - 维鲸运营系统</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        body { background-color: #f8f9fa; }
+        .navbar-brand { font-weight: bold; color: #0d6efd !important; }
+        .card { border-radius: 10px; border: none; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .upload-area { 
+            border: 2px dashed #ddd; 
+            border-radius: 10px; 
+            padding: 40px; 
+            text-align: center;
+            background-color: #f8f9fa;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .upload-area:hover {
+            border-color: #0d6efd;
+            background-color: #e7f1ff;
+        }
+        .file-name {
+            margin-top: 10px;
+            color: #666;
+        }
+        .required-field::after {
+            content: " *";
+            color: #dc3545;
+        }
+    </style>
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                🐋 维鲸运营系统
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">首页</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/dashboard">数据看板</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/import">导入数据</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/search">搜索查询</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 主内容 -->
+    <div class="container mt-4">
+        <h2 class="mb-4">📥 数据导入</h2>
+        
+        <!-- 导入表单 -->
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h4 class="mb-0">选择数据类型和文件</h4>
+                    </div>
+                    <div class="card-body">
+                        <form id="importForm">
+                            <!-- 数据类型选择 -->
+                            <div class="mb-4">
+                                <h5>1. 选择数据类型</h5>
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="dataType" id="transactions" value="transactions" checked>
+                                            <label class="form-check-label" for="transactions">
+                                                💰 交易结算数据
+                                            </label>
+                                            <div class="form-text">包含销售回款、销售冲回、非商责补贴</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="dataType" id="afterSales" value="afterSales">
+                                            <label class="form-check-label" for="afterSales">
+                                                🛡️ 售后问题数据
+                                            </label>
+                                            <div class="form-text">包含违规ID、赔付金额等信息</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="dataType" id="shipping" value="shipping">
+                                            <label class="form-check-label" for="shipping">
+                                                📦 发货明细数据
+                                            </label>
+                                            <div class="form-text">包含备货单号、商品信息、发货数量</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 店铺选择 -->
+                            <div class="mb-4">
+                                <h5>2. 选择店铺</h5>
+                                <select class="form-select" id="shopSelect" required>
+                                    <option value="">-- 请选择店铺 --</option>
+                                    {% for shop in shops %}
+                                        {% if shop != "汇总" %}
+                                        <option value="{{ shop }}">{{ shop }}</option>
+                                        {% endif %}
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <!-- 文件上传 -->
+                            <div class="mb-4">
+                                <h5>3. 上传CSV文件</h5>
+                                <div class="upload-area" id="uploadArea">
+                                    <input type="file" id="fileInput" accept=".csv" style="display: none;">
+                                    <div class="upload-icon" style="font-size: 48px;">📁</div>
+                                    <h5>点击选择文件或拖拽到此区域</h5>
+                                    <p class="text-muted">支持CSV格式文件，最大16MB</p>
+                                    <div class="file-name" id="fileName">未选择文件</div>
+                                </div>
+                            </div>
+
+                            <!-- 导入按钮 -->
+                            <div class="d-grid">
+                                <button type="button" class="btn btn-primary btn-lg" id="importBtn">
+                                    <span id="importText">开始导入数据</span>
+                                    <span id="importSpinner" class="spinner-border spinner-border-sm" style="display: none;"></span>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右侧说明 -->
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">📋 导入说明</h5>
+                    </div>
+                    <div class="card-body">
+                        <h6>📄 文件格式要求：</h6>
+                        <ul>
+                            <li>必须是CSV格式（UTF-8编码）</li>
+                            <li>第一行为列标题</li>
+                            <li>支持Excel导出的CSV文件</li>
+                        </ul>
+
+                        <h6>💰 交易结算数据：</h6>
+                        <p>必需列：<br>
+                        <code>备货单号, SKU ID, 数量, 金额, 交易类型</code></p>
+
+                        <h6>🛡️ 售后问题数据：</h6>
+                        <p>必需列：<br>
+                        <code>违规ID, SKU ID, 赔付金额, 账务时间</code></p>
+
+                        <h6>📦 发货明细数据：</h6>
+                        <p>必需列：<br>
+                        <code>备货单, 商品SPU ID, 商品SKU ID, 商品名称</code></p>
+
+                        <div class="alert alert-info mt-3">
+                            <small>
+                                <strong>💡 提示：</strong><br>
+                                1. 系统会自动去重，重复数据不会重复导入<br>
+                                2. 导入后请到"数据看板"查看效果<br>
+                                3. 支持分批导入，按日期或店铺筛选后导入
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 导入历史 -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h4 class="mb-0">📜 最近导入记录</h4>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <div class="d-flex align-items-center">
+                        <span class="me-3">📊</span>
+                        <div>
+                            <p class="mb-1">暂无导入记录</p>
+                            <p class="mb-0 text-muted">导入数据后，这里会显示最近的导入记录</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 页脚 -->
+    <footer class="bg-dark text-white mt-5 py-4">
+        <div class="container text-center">
+            <p class="mb-0">🐋 维鲸运营系统 &copy; 2025</p>
+            <p class="mb-0">技术支持：结算追踪系统</p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // 文件上传处理
+        document.getElementById('uploadArea').addEventListener('click', function() {
+            document.getElementById('fileInput').click();
+        });
+
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                document.getElementById('fileName').textContent = file.name;
+                document.getElementById('fileName').className = 'file-name text-success';
+            }
+        });
+
+        // 拖拽上传
+        document.getElementById('uploadArea').addEventListener('dragover', function(e) {
+            e.preventDefault();
+            this.style.borderColor = '#0d6efd';
+            this.style.backgroundColor = '#e7f1ff';
+        });
+
+        document.getElementById('uploadArea').addEventListener('dragleave', function(e) {
+            e.preventDefault();
+            this.style.borderColor = '#ddd';
+            this.style.backgroundColor = '#f8f9fa';
+        });
+
+        document.getElementById('uploadArea').addEventListener('drop', function(e) {
+            e.preventDefault();
+            this.style.borderColor = '#ddd';
+            this.style.backgroundColor = '#f8f9fa';
+            
+            const file = e.dataTransfer.files[0];
+            if (file && file.name.endsWith('.csv')) {
+                document.getElementById('fileInput').files = e.dataTransfer.files;
+                document.getElementById('fileName').textContent = file.name;
+                document.getElementById('fileName').className = 'file-name text-success';
+            } else {
+                alert('请选择CSV格式的文件');
+            }
+        });
+
+        // 导入按钮点击
+        document.getElementById('importBtn').addEventListener('click', function() {
+            const shopSelect = document.getElementById('shopSelect');
+            const fileInput = document.getElementById('fileInput');
+            
+            if (!shopSelect.value) {
+                alert('请选择店铺');
+                return;
+            }
+            
+            if (!fileInput.files[0]) {
+                alert('请选择要上传的文件');
+                return;
+            }
+            
+            // 显示加载状态
+            const importBtn = document.getElementById('importBtn');
+            const importText = document.getElementById('importText');
+            const importSpinner = document.getElementById('importSpinner');
+            
+            importBtn.disabled = true;
+            importText.textContent = '正在导入...';
+            importSpinner.style.display = 'inline-block';
+            
+            // 模拟导入过程
+            setTimeout(() => {
+                alert('导入成功！\n\n提示：后端功能正在开发中，实际导入功能将在后续版本提供。');
+                
+                // 重置按钮状态
+                importBtn.disabled = false;
+                importText.textContent = '开始导入数据';
+                importSpinner.style.display = 'none';
+                
+                // 重置表单
+                document.getElementById('fileName').textContent = '未选择文件';
+                document.getElementById('fileName').className = 'file-name';
+                fileInput.value = '';
+                
+            }, 2000);
+        });
+    </script>
+</body>
+</html>
