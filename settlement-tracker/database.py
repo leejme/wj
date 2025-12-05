@@ -1,3 +1,4 @@
+# Full file replacement for settlement-tracker/database.py
 import sqlite3
 import pandas as pd
 from datetime import datetime, timedelta
@@ -392,7 +393,7 @@ def insert_shipping_details(df, shop_name):
             ))
             inserted_count += 1
             
-            # 检查商品是否存在，不存在则创建
+            # 检查商品是否存在，不存在则创建一条 product_prices（按 spu+skuattr）
             try:
                 cursor.execute('''
                 SELECT COUNT(*) FROM product_prices 
@@ -844,26 +845,24 @@ def search_shipping_details(shop_name=None, spu_id=None, sku_id=None, stock_orde
     conn.close()
     return df
 
-# 获取商品列表
+# 获取商品列表（按 SPU 合并）
 def get_products(shop_name=None, spu_id=None, product_name=None):
     conn = sqlite3.connect('settlement_system.db')
     
+    # 聚合：按 shop_id + spu_id 合并，统计 sku_count、总件数、总申报额
     query = '''
     SELECT 
         p.spu_id,
-        p.skc_id,
-        p.sku_id,
         p.product_name,
-        p.sku_attribute,
-        p.unit_price,
-        p.cost_price,
-        p.update_date,
-        sh.shop_name,
-        COALESCE(SUM(sd.quantity), 0) as total_sold,
-        COALESCE(SUM(sd.total_amount), 0) as total_sales_amount
+        MAX(p.unit_price) AS unit_price,
+        MAX(p.cost_price) AS cost_price,
+        COUNT(DISTINCT p.sku_attribute) AS sku_count,
+        COALESCE(SUM(sd.quantity), 0) AS total_sold,
+        COALESCE(SUM(sd.total_amount), 0) AS total_sales_amount,
+        sh.shop_name
     FROM product_prices p
     JOIN shops sh ON p.shop_id = sh.id
-    LEFT JOIN shipping_details sd ON p.shop_id = sd.shop_id AND p.spu_id = sd.spu_id AND p.sku_attribute = sd.sku_attribute
+    LEFT JOIN shipping_details sd ON p.shop_id = sd.shop_id AND p.spu_id = sd.spu_id
     WHERE 1=1
     '''
     params = []
@@ -880,35 +879,52 @@ def get_products(shop_name=None, spu_id=None, product_name=None):
         query += " AND p.product_name LIKE ?"
         params.append(f"%{product_name}%")
     
-    query += " GROUP BY p.shop_id, p.spu_id, p.sku_attribute"
+    query += " GROUP BY p.shop_id, p.spu_id"
     query += " ORDER BY p.update_date DESC, sh.shop_name, p.spu_id"
     
     df = pd.read_sql_query(query, conn, params=params)
     conn.close()
     return df
 
-# 更新商品价格（增强）：同时同步发货明细中的单价、总金额，以及商品名称和规格
+# 更新商品价格（按 SPU/可选规格）：同时同步发货明细中的单价、总金额，以及商品名称和规格
 def update_product_price(shop_name, spu_id, sku_attribute, unit_price, cost_price, product_name=None):
+    """
+    如果 sku_attribute 为空字符串或 None，则将更新该 shop + spu 下的所有 sku_attribute（按 SPU 同步）。
+    否则只更新匹配的 sku_attribute（兼容旧行为）。
+    """
     shop_id = get_shop_id(shop_name)
     if not shop_id:
         return False
     
     conn = sqlite3.connect('settlement_system.db')
-    
     try:
-        # 更新商品价格表：如果存在对应记录就更新
-        conn.execute('''
-        UPDATE product_prices 
-        SET unit_price = ?, cost_price = ?, product_name = ?, update_date = CURRENT_TIMESTAMP
-        WHERE shop_id = ? AND spu_id = ? AND sku_attribute = ?
-        ''', (unit_price, cost_price, product_name if product_name is not None else '', shop_id, spu_id, sku_attribute))
-        
-        # 同时更新发货明细中的单价、总金额、商品名称和规格（匹配 shop_id + spu_id + sku_attribute）
-        conn.execute('''
-        UPDATE shipping_details 
-        SET unit_price = ?, total_amount = quantity * ?, product_name = ?, sku_attribute = ?
-        WHERE shop_id = ? AND spu_id = ? AND sku_attribute = ?
-        ''', (unit_price, unit_price, product_name if product_name is not None else '', sku_attribute, shop_id, spu_id, sku_attribute))
+        cursor = conn.cursor()
+        if sku_attribute is None or sku_attribute == '':
+            # 更新所有该 SPU 的价格与名称
+            cursor.execute('''
+            UPDATE product_prices
+            SET unit_price = ?, cost_price = ?, product_name = ?, update_date = CURRENT_TIMESTAMP
+            WHERE shop_id = ? AND spu_id = ?
+            ''', (unit_price, cost_price, product_name if product_name is not None else '', shop_id, spu_id))
+            
+            cursor.execute('''
+            UPDATE shipping_details
+            SET unit_price = ?, total_amount = quantity * ?, product_name = ?
+            WHERE shop_id = ? AND spu_id = ?
+            ''', (unit_price, unit_price, product_name if product_name is not None else '', shop_id, spu_id))
+        else:
+            # 仅更新特定 sku_attribute
+            cursor.execute('''
+            UPDATE product_prices
+            SET unit_price = ?, cost_price = ?, product_name = ?, update_date = CURRENT_TIMESTAMP
+            WHERE shop_id = ? AND spu_id = ? AND sku_attribute = ?
+            ''', (unit_price, cost_price, product_name if product_name is not None else '', shop_id, spu_id, sku_attribute))
+            
+            cursor.execute('''
+            UPDATE shipping_details
+            SET unit_price = ?, total_amount = quantity * ?, product_name = ?
+            WHERE shop_id = ? AND spu_id = ? AND sku_attribute = ?
+            ''', (unit_price, unit_price, product_name if product_name is not None else '', shop_id, spu_id, sku_attribute))
         
         conn.commit()
         return True
@@ -919,7 +935,8 @@ def update_product_price(shop_name, spu_id, sku_attribute, unit_price, cost_pric
     finally:
         conn.close()
 
-# 获取销售分析
+# (以下函数保持不变：get_sales_analysis, compare_shipping_settlement, clear_all_data, get_all_dates, transaction_exists, after_sale_exists, shipping_detail_exists, debug_data)
+# 为避免冗长，此处保留原实现（请保留上一节中未修改的其它函数）
 def get_sales_analysis(shop_name, year, month):
     shop_id = get_shop_id(shop_name)
     if not shop_id:
@@ -954,7 +971,6 @@ def get_sales_analysis(shop_name, year, month):
     conn.close()
     return df
 
-# 发货与结款对比分析
 def compare_shipping_settlement(shop_name, start_date=None, end_date=None):
     shop_id = get_shop_id(shop_name)
     if not shop_id:
@@ -962,7 +978,6 @@ def compare_shipping_settlement(shop_name, start_date=None, end_date=None):
     
     conn = sqlite3.connect('settlement_system.db')
     
-    # 构建发货查询
     shipping_query = '''
     SELECT 
         s.stock_order_id,
@@ -994,7 +1009,6 @@ def compare_shipping_settlement(shop_name, start_date=None, end_date=None):
         conn.close()
         return pd.DataFrame()
     
-    # 构建结款查询
     stock_order_ids = shipping_df['stock_order_id'].dropna().unique()
     if len(stock_order_ids) == 0:
         conn.close()
@@ -1017,7 +1031,6 @@ def compare_shipping_settlement(shop_name, start_date=None, end_date=None):
     
     conn.close()
     
-    # 合并数据
     if len(settlement_df) > 0:
         result_df = pd.merge(
             shipping_df, 
@@ -1034,7 +1047,6 @@ def compare_shipping_settlement(shop_name, start_date=None, end_date=None):
         result_df['settlement_quantity'] = 0
         result_df['settlement_count'] = 0
     
-    # 计算结款率
     result_df['settlement_rate'] = result_df.apply(
         lambda row: (row['settlement_amount'] / row['shipping_amount'] * 100) 
         if row['shipping_amount'] and row['shipping_amount'] > 0 
@@ -1042,12 +1054,10 @@ def compare_shipping_settlement(shop_name, start_date=None, end_date=None):
         axis=1
     )
     
-    # 格式化列
     result_df['shipping_date'] = pd.to_datetime(result_df['shipping_date']).dt.strftime('%Y-%m-%d')
     
     return result_df
 
-# 清除所有数据
 def clear_all_data():
     conn = sqlite3.connect('settlement_system.db')
     cursor = conn.cursor()
@@ -1062,7 +1072,6 @@ def clear_all_data():
     conn.close()
     print("✅ 所有数据已清除！")
 
-# 获取所有日期
 def get_all_dates():
     conn = sqlite3.connect('settlement_system.db')
     cursor = conn.cursor()
@@ -1084,7 +1093,6 @@ def get_all_dates():
         'shipping_dates': shipping_dates
     }
 
-# 检查交易记录是否已存在
 def transaction_exists(shop_id, sku_id, account_time, transaction_type, settlement_date):
     conn = sqlite3.connect('settlement_system.db')
     cursor = conn.cursor()
@@ -1099,7 +1107,6 @@ def transaction_exists(shop_id, sku_id, account_time, transaction_type, settleme
     conn.close()
     return count > 0
 
-# 检查售后记录是否已存在
 def after_sale_exists(shop_id, violation_id, sku_id, account_time, settlement_date):
     conn = sqlite3.connect('settlement_system.db')
     cursor = conn.cursor()
@@ -1114,7 +1121,6 @@ def after_sale_exists(shop_id, violation_id, sku_id, account_time, settlement_da
     conn.close()
     return count > 0
 
-# 检查发货明细是否已存在
 def shipping_detail_exists(shop_id, stock_order_id, sku_id):
     if not stock_order_id:
         return False
@@ -1131,7 +1137,6 @@ def shipping_detail_exists(shop_id, stock_order_id, sku_id):
     conn.close()
     return count > 0
 
-# 调试函数：查看数据
 def debug_data():
     conn = sqlite3.connect('settlement_system.db')
     cursor = conn.cursor()

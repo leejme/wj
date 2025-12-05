@@ -8,7 +8,7 @@
     <div class="d-flex justify-content-between align-items-center mb-5">
         <div>
             <h1 class="h2 fw-bold mb-2">商品管理</h1>
-            <p class="text-gray-600">管理商品信息、价格及库存数据（修改会同步到发货明细）</p>
+            <p class="text-gray-600">管理商品信息、价格及库存数据（修改会同步到发货明细，按 SPU 合并显示）</p>
         </div>
         <button class="btn btn-minimal btn-minimal-primary" data-bs-toggle="modal" data-bs-target="#addProductModal">
             <i class="fas fa-plus me-2"></i>添加商品
@@ -50,10 +50,10 @@
         </div>
     </div>
 
-    <!-- 商品列表 -->
+    <!-- 商品列表（按 SPU 合并） -->
     <div class="minimal-card">
         <div class="minimal-card-header">
-            <h4 class="mb-0">商品列表</h4>
+            <h4 class="mb-0">商品列表（按 SPU 合并）</h4>
         </div>
         <div class="minimal-card-body">
             <div class="table-responsive">
@@ -63,18 +63,18 @@
                             <th>店铺</th>
                             <th>SPU ID</th>
                             <th>商品名称</th>
-                            <th>规格</th>
-                            <th>销售单价</th>
+                            <th>规格数</th>
+                            <th>申报价格</th>
                             <th>成本单价</th>
                             <th>已售数量</th>
-                            <th>销售额</th>
+                            <th>申报额</th>
                             <th>操作</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% if products %}
                             {% for p in products %}
-                            <tr data-spu="{{ p.spu_id }}" data-skuattr="{{ p.sku_attribute }}" data-shop="{{ p.shop_name }}">
+                            <tr data-spu="{{ p.spu_id }}" data-shop="{{ p.shop_name }}">
                                 <td>{{ p.shop_name }}</td>
                                 <td><code>{{ p.spu_id }}</code></td>
                                 <td>
@@ -84,7 +84,11 @@
                                         </span>
                                     </div>
                                 </td>
-                                <td><span class="badge-minimal" style="background-color: var(--gray-100); color: var(--gray-700);">{{ p.sku_attribute }}</span></td>
+                                <td>
+                                    <span class="badge-minimal" style="background-color: var(--gray-100); color: var(--gray-700);">
+                                        {{ p.sku_count if p.sku_count is not none else 1 }}
+                                    </span>
+                                </td>
                                 <td class="fw-bold text-success">¥{{ "%.2f"|format(p.unit_price if p.unit_price is not none else 0) }}</td>
                                 <td class="text-gray-600">¥{{ "%.2f"|format(p.cost_price if p.cost_price is not none else 0) }}</td>
                                 <td><span class="fw-medium">{{ p.total_sold if p.total_sold is not none else 0 }}</span></td>
@@ -134,12 +138,12 @@
     </div>
 </div>
 
-<!-- 编辑商品模态框（用于同步发货明细） -->
+<!-- 编辑商品模态框（按 SPU 编辑） -->
 <div class="modal fade" id="editProductModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">编辑商品</h5>
+                <h5 class="modal-title">编辑商品（按 SPU）</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
@@ -150,15 +154,11 @@
                         <input type="text" id="editSpu" class="form-control" readonly>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">SKU 属性</label>
-                        <input type="text" id="editSkuAttr" class="form-control" required>
-                    </div>
-                    <div class="mb-3">
                         <label class="form-label">商品名称</label>
                         <input type="text" id="editName" class="form-control" required>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">销售单价 (¥)</label>
+                        <label class="form-label">申报价格 (¥)</label>
                         <input type="number" step="0.01" id="editUnitPrice" class="form-control" required>
                     </div>
                     <div class="mb-3">
@@ -166,7 +166,7 @@
                         <input type="number" step="0.01" id="editCostPrice" class="form-control" required>
                     </div>
                     <div class="form-text mb-2">
-                        修改后会自动同步到该 SPU+规格 在发货明细中的单价、总金额及商品名称 / 规格。
+                        修改后会自动同步到该 SPU 在发货明细中的单价、申报额及商品名称（会应用到该 SPU 的所有规格）。
                     </div>
                 </form>
             </div>
@@ -213,7 +213,7 @@
                             <input type="text" class="form-control" placeholder="例如：红色/M" required>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">销售单价</label>
+                            <label class="form-label">申报价格</label>
                             <input type="number" class="form-control" step="0.01" required>
                         </div>
                         <div class="col-md-6">
@@ -252,18 +252,16 @@ function resetFilters() {
     window.location.href = '/products';
 }
 
-// 打开编辑模态框，填充数据
+// 打开编辑模态框，填充数据（按 SPU）
 function openEditModal(btn) {
     const tr = btn.closest('tr');
     const spu = tr.dataset.spu || tr.querySelector('code')?.textContent;
-    const skuattr = tr.dataset.skuattr || tr.querySelector('td:nth-child(4)')?.textContent.trim();
     const shop = tr.dataset.shop || tr.querySelector('td')?.textContent.trim();
     const name = tr.querySelector('td:nth-child(3)')?.textContent.trim();
     const unitPriceText = tr.querySelector('td:nth-child(5)')?.textContent.replace('¥','').trim();
     const costPriceText = tr.querySelector('td:nth-child(6)')?.textContent.replace('¥','').trim();
 
     document.getElementById('editSpu').value = spu || '';
-    document.getElementById('editSkuAttr').value = skuattr || '';
     document.getElementById('editShop').value = shop || '';
     document.getElementById('editName').value = name || '';
     document.getElementById('editUnitPrice').value = unitPriceText || 0;
@@ -272,17 +270,16 @@ function openEditModal(btn) {
     new bootstrap.Modal(document.getElementById('editProductModal')).show();
 }
 
-// 提交编辑并调用 API，同步发货明细
+// 提交编辑并调用 API，同步发货明细（按 SPU，sku_attribute 传空表示同步该 SPU 的所有规格）
 function submitEdit(e) {
     if (e) e.preventDefault();
     const shop = document.getElementById('editShop').value;
     const spu = document.getElementById('editSpu').value;
-    const skuattr = document.getElementById('editSkuAttr').value;
     const name = document.getElementById('editName').value;
     const unitPrice = parseFloat(document.getElementById('editUnitPrice').value || 0);
     const costPrice = parseFloat(document.getElementById('editCostPrice').value || 0);
 
-    if (!shop || !spu || !skuattr) {
+    if (!shop || !spu) {
         alert('缺少必要字段');
         return;
     }
@@ -290,7 +287,7 @@ function submitEdit(e) {
     const payload = {
         shop_name: shop,
         spu_id: spu,
-        sku_attribute: skuattr,
+        sku_attribute: '',  // 空表示按 SPU 同步所有规格
         unit_price: unitPrice,
         cost_price: costPrice,
         product_name: name
@@ -304,7 +301,7 @@ function submitEdit(e) {
     .then(resp => resp.json())
     .then(data => {
         if (data.success) {
-            alert('更新成功，已同步发货明细中的单价与商品信息');
+            alert('更新成功，已同步发货明细中的申报价格与商品信息');
             bootstrap.Modal.getInstance(document.getElementById('editProductModal')).hide();
             setTimeout(()=> location.reload(), 600);
         } else {

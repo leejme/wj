@@ -1,3 +1,4 @@
+```python name=settlement-tracker/app.py url=https://github.com/leejme/wj/blob/main/settlement-tracker/app.py
 # database.py - 维鲸运营系统数据库
 import sqlite3
 import pandas as pd
@@ -99,8 +100,8 @@ def init_database():
         sku_attribute TEXT,    -- 商品属性集（规格）
         stock_order_id TEXT,   -- 备货单号
         quantity INTEGER,      -- 件数
-        unit_price REAL DEFAULT 0,     -- 单价
-        total_amount REAL DEFAULT 0,   -- 总金额
+        unit_price REAL DEFAULT 0,     -- 单价（申报价格）
+        total_amount REAL DEFAULT 0,   -- 总金额（申报额）
         shipping_date DATE,    -- 发货日期（从备货单号解析）
         upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (shop_id) REFERENCES shops (id),
@@ -118,7 +119,7 @@ def init_database():
         sku_id TEXT,           -- 商品SKU ID
         product_name TEXT,     -- 商品名称
         sku_attribute TEXT,    -- 商品属性集（规格）
-        unit_price REAL DEFAULT 0,     -- 销售单价
+        unit_price REAL DEFAULT 0,     -- 销售单价 / 申报价格
         cost_price REAL DEFAULT 0,     -- 成本单价
         update_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (shop_id) REFERENCES shops (id),
@@ -135,15 +136,18 @@ def parse_date_from_stock_id(stock_order_id):
     if not stock_order_id or not isinstance(stock_order_id, str):
         return None
     
-    # 查找日期部分（WB(\d{6})）
+    # 查找日期部分（WB251016... → 251016）
     match = re.search(r'WB(\d{6})', stock_order_id)
     if match:
         date_str = match.group(1)
         try:
+            # 解析日期格式：前2位年份，中间2位月份，后2位日期
+            # 注意：25年应该解析为2025年
             year = int("20" + date_str[:2])  # 25 → 2025
             month = int(date_str[2:4])
             day = int(date_str[4:6])
             
+            # 验证日期是否有效
             if 1 <= month <= 12 and 1 <= day <= 31:
                 return f"{year:04d}-{month:02d}-{day:02d}"
             else:
@@ -153,6 +157,10 @@ def parse_date_from_stock_id(stock_order_id):
             print(f"日期解析错误: {e}, 原始字符串: {stock_order_id}")
             return None
     else:
+        # 允许其它格式后备选解析
+        match2 = re.search(r'(\d{4})-(\d{2})-(\d{2})', stock_order_id)
+        if match2:
+            return f"{match2.group(1)}-{match2.group(2)}-{match2.group(3)}"
         print(f"未找到日期部分: {stock_order_id}")
         return None
 
@@ -359,6 +367,8 @@ def insert_shipping_details(df, shop_name):
             # 获取商品信息
             spu_id = str(row.get('商品SPU ID', '')).strip()
             skc_id = str(row.get('商品SKC ID', '')).strip()
+            if not skc_id:
+                skc_id = str(row.get('SKC ID', '')).strip()
             sku_id = str(row.get('商品SKU ID', '')).strip()
             product_name = str(row.get('商品名称', '')).strip()
             sku_attribute = str(row.get('商品属性集', '')).strip()
@@ -859,26 +869,24 @@ def search_shipping_details(shop_name=None, spu_id=None, sku_id=None, stock_orde
     conn.close()
     return df
 
-# 获取商品列表（新增）
+# 获取商品列表（按 SPU 合并）
 def get_products(shop_name=None, spu_id=None, product_name=None):
     conn = sqlite3.connect('settlement_system.db')
     
+    # 聚合：按 shop_id + spu_id 合并，统计 sku_count、总件数、总申报额
     query = '''
     SELECT 
         p.spu_id,
-        p.skc_id,
-        p.sku_id,
         p.product_name,
-        p.sku_attribute,
-        p.unit_price,
-        p.cost_price,
-        p.update_date,
-        sh.shop_name,
-        COALESCE(SUM(sd.quantity), 0) as total_sold,
-        COALESCE(SUM(sd.total_amount), 0) as total_sales_amount
+        MAX(p.unit_price) AS unit_price,
+        MAX(p.cost_price) AS cost_price,
+        COUNT(DISTINCT p.sku_attribute) AS sku_count,
+        COALESCE(SUM(sd.quantity), 0) AS total_sold,
+        COALESCE(SUM(sd.total_amount), 0) AS total_sales_amount,
+        sh.shop_name
     FROM product_prices p
     JOIN shops sh ON p.shop_id = sh.id
-    LEFT JOIN shipping_details sd ON p.shop_id = sd.shop_id AND p.spu_id = sd.spu_id AND p.sku_attribute = sd.sku_attribute
+    LEFT JOIN shipping_details sd ON p.shop_id = sd.shop_id AND p.spu_id = sd.spu_id
     WHERE 1=1
     '''
     params = []
@@ -895,35 +903,52 @@ def get_products(shop_name=None, spu_id=None, product_name=None):
         query += " AND p.product_name LIKE ?"
         params.append(f"%{product_name}%")
     
-    query += " GROUP BY p.shop_id, p.spu_id, p.sku_attribute"
+    query += " GROUP BY p.shop_id, p.spu_id"
     query += " ORDER BY p.update_date DESC, sh.shop_name, p.spu_id"
     
     df = pd.read_sql_query(query, conn, params=params)
     conn.close()
     return df
 
-# 更新商品价格（新增/增强）
+# 更新商品价格（按 SPU/可选规格）：同时同步发货明细中的单价、总金额，以及商品名称和规格
 def update_product_price(shop_name, spu_id, sku_attribute, unit_price, cost_price, product_name=None):
+    """
+    如果 sku_attribute 为空字符串或 None，则将更新该 shop + spu 下的所有 sku_attribute（按 SPU 同步）。
+    否则只更新匹配的 sku_attribute（兼容旧行为）。
+    """
     shop_id = get_shop_id(shop_name)
     if not shop_id:
         return False
     
     conn = sqlite3.connect('settlement_system.db')
-    
     try:
-        # 更新商品价格表
-        conn.execute('''
-        UPDATE product_prices 
-        SET unit_price = ?, cost_price = ?, product_name = ?, update_date = CURRENT_TIMESTAMP
-        WHERE shop_id = ? AND spu_id = ? AND sku_attribute = ?
-        ''', (unit_price, cost_price, product_name if product_name is not None else '', shop_id, spu_id, sku_attribute))
-        
-        # 同时更新发货明细中的单价和总金额，并同步商品名称与规格
-        conn.execute('''
-        UPDATE shipping_details 
-        SET unit_price = ?, total_amount = quantity * ?, product_name = ?, sku_attribute = ?
-        WHERE shop_id = ? AND spu_id = ? AND sku_attribute = ?
-        ''', (unit_price, unit_price, product_name if product_name is not None else '', sku_attribute, shop_id, spu_id, sku_attribute))
+        cursor = conn.cursor()
+        if sku_attribute is None or sku_attribute == '':
+            # 更新所有该 SPU 的价格与名称
+            cursor.execute('''
+            UPDATE product_prices
+            SET unit_price = ?, cost_price = ?, product_name = ?, update_date = CURRENT_TIMESTAMP
+            WHERE shop_id = ? AND spu_id = ?
+            ''', (unit_price, cost_price, product_name if product_name is not None else '', shop_id, spu_id))
+            
+            cursor.execute('''
+            UPDATE shipping_details
+            SET unit_price = ?, total_amount = quantity * ?, product_name = ?
+            WHERE shop_id = ? AND spu_id = ?
+            ''', (unit_price, unit_price, product_name if product_name is not None else '', shop_id, spu_id))
+        else:
+            # 仅更新特定 sku_attribute
+            cursor.execute('''
+            UPDATE product_prices
+            SET unit_price = ?, cost_price = ?, product_name = ?, update_date = CURRENT_TIMESTAMP
+            WHERE shop_id = ? AND spu_id = ? AND sku_attribute = ?
+            ''', (unit_price, cost_price, product_name if product_name is not None else '', shop_id, spu_id, sku_attribute))
+            
+            cursor.execute('''
+            UPDATE shipping_details
+            SET unit_price = ?, total_amount = quantity * ?, product_name = ?
+            WHERE shop_id = ? AND spu_id = ? AND sku_attribute = ?
+            ''', (unit_price, unit_price, product_name if product_name is not None else '', shop_id, spu_id, sku_attribute))
         
         conn.commit()
         return True

@@ -44,7 +44,7 @@
                     <div class="col-md-3">
                         <label class="form-label">日期范围</label>
                         <div class="d-flex gap-2">
-                            <input type="date" class="form-control search-input" name="start_date" placeholder="开始日期" value="{{ start_date }}">
+                            <input type="date" class="form-control search-input mb-2" name="start_date" placeholder="开始日期" value="{{ start_date }}">
                             <input type="date" class="form-control search-input" name="end_date" placeholder="结束日期" value="{{ end_date }}">
                         </div>
                     </div>
@@ -87,8 +87,8 @@
                             <th>SPU ID</th>
                             <th>SKU ID</th>
                             <th>数量</th>
-                            <th>单价</th>
-                            <th>总金额</th>
+                            <th>申报价格</th>
+                            <th>申报额</th>
                             <th>发货日期</th>
                         </tr>
                     </thead>
@@ -97,13 +97,20 @@
                         <tr>
                             <td>{{ item.shop_name }}</td>
                             <td><code>{{ item.stock_order_id }}</code></td>
-                            <td>{{ item.product_name }}</td>
+                            <td>
+                                <!-- 长名称自动截断，鼠标悬停显示完整名称 -->
+                                <div style="max-width:340px;">
+                                    <span class="d-inline-block text-truncate" style="max-width:320px;" title="{{ item.product_name }}">
+                                        {{ item.product_name }}
+                                    </span>
+                                </div>
+                            </td>
                             <td><span class="badge-minimal" style="background-color: var(--gray-100); color: var(--gray-700);">{{ item.sku_attribute }}</span></td>
                             <td><small class="text-gray-500">{{ item.spu_id }}</small></td>
                             <td><small class="text-gray-500">{{ item.sku_id }}</small></td>
                             <td><span class="fw-medium">{{ item.quantity }}</span></td>
-                            <td class="text-gray-600">¥{{ "%.2f"|format(item.unit_price) }}</td>
-                            <td class="fw-bold">¥{{ "%.2f"|format(item.total_amount) }}</td>
+                            <td class="text-gray-600">¥{{ "%.2f"|format(item.unit_price if item.unit_price is not none else 0) }}</td>
+                            <td class="fw-bold">¥{{ "%.2f"|format(item.total_amount if item.total_amount is not none else ( (item.unit_price or 0) * (item.quantity or 0) )) }}</td>
                             <td><span class="text-gray-500">{{ item.shipping_date }}</span></td>
                         </tr>
                         {% endfor %}
@@ -122,8 +129,8 @@
                     </div>
                     <div class="col-md-3 mb-2">
                         <div class="text-center p-2 border rounded">
-                            <div class="fw-bold text-success">¥{{ "%.2f"|format(total_amount) }}</div>
-                            <div class="text-gray-600 small">总金额</div>
+                            <div class="fw-bold text-success">¥{{ "%.2f"|format(total_amount if total_amount is not none else 0) }}</div>
+                            <div class="text-gray-600 small">总申报额</div>
                         </div>
                     </div>
                     <div class="col-md-3 mb-2">
@@ -163,11 +170,17 @@ function resetFilter() {
 }
 
 function exportShippingData() {
-    // 构建导出URL
     const form = document.getElementById('shippingFilterForm');
     const params = new URLSearchParams(new FormData(form));
     window.open(`/export/shipping?${params.toString()}`, '_blank');
 }
+
+// 启用 Bootstrap Tooltip 显示完整商品名称
+document.addEventListener('DOMContentLoaded', function() {
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[title]'))
+    tooltipTriggerList.forEach(function (el) {
+        new bootstrap.Tooltip(el, {container: 'body', trigger: 'hover'});
+    })
+});
 </script>
 {% endblock %}
-EOF
