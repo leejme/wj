@@ -23,7 +23,7 @@
                         <th class="px-6 py-3 text-left font-semibold">文件名</th>
                         <th class="px-6 py-3 text-left font-semibold">归属店铺</th>
                         <th class="px-6 py-3 text-left font-semibold">类型</th>
-                        <th class="px-6 py-3 text-right font-semibold">包含数据(条)</th>
+                        <th class="px-6 py-3 text-right font-semibold">状态 / 条数</th>
                         <th class="px-6 py-3 text-center font-semibold">操作</th>
                     </tr>
                 </thead>
@@ -49,7 +49,13 @@
                             {% endif %}
                         </td>
                         <td class="px-6 py-4 text-right text-gray-600 font-mono">
-                            {{ record.row_count }}
+                            {% if record.row_count == -1 %}
+                            <span class="text-red-500 font-bold">解析失败</span>
+                            {% elif record.row_count == 0 %}
+                            <span class="text-orange-500">无有效数据</span>
+                            {% else %}
+                            {{ record.row_count }} 条
+                            {% endif %}
                         </td>
                         <td class="px-6 py-4 text-center">
                             <button onclick="deleteFile({{ record.id }}, '{{ record.filename }}')" 
@@ -73,7 +79,7 @@
 
 <script>
     async function deleteFile(id, name) {
-        if (!confirm(`⚠️ 危险操作确认\n\n确定要撤销文件 "${name}" 吗？\n\n这将永久删除该文件包含的所有 ${id} 条数据！`)) return;
+        if (!confirm(`⚠️ 危险操作确认\n\n确定要撤销文件 "${name}" 吗？\n\n这将永久删除该文件包含的所有数据！`)) return;
         
         try {
             const res = await fetch(`/files/delete/${id}`, { method: 'POST' });
@@ -81,9 +87,8 @@
             
             if (data.status === 'success') {
                 alert(data.msg);
-                // 移除行效果
                 const row = document.getElementById(`record-${id}`);
-                row.style.backgroundColor = '#fee2e2'; // red-100
+                row.style.backgroundColor = '#fee2e2';
                 setTimeout(() => row.remove(), 500);
             } else {
                 alert('删除失败: ' + data.msg);

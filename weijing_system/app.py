@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, jsonify, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import func, or_, desc, case, and_, extract
+from sqlalchemy import func, or_, desc, case, and_, extract, text
 from datetime import datetime, date, timedelta
 import pandas as pd
 import os
@@ -8,6 +8,7 @@ import re
 from itertools import groupby
 import calendar
 import socket
+from io import StringIO
 
 app = Flask(__name__)
 app.secret_key = 'weijing_secret_key'
@@ -91,10 +92,19 @@ def extract_date_from_order(order_no):
     return date.today()
 
 def find_column(df_columns, possible_names):
+    # 1. 优先精确匹配
     for col in df_columns:
-        clean_col = str(col).strip().replace('\t', '').replace('\n', '')
+        clean_col = str(col).strip().replace('\t', '').replace('\n', '').replace(' ', '').replace('\ufeff', '')
         for p in possible_names:
-            if p.lower() in clean_col.lower():
+            target = p.lower().replace(' ', '')
+            if target == clean_col.lower():
+                return col
+    # 2. 模糊匹配
+    for col in df_columns:
+        clean_col = str(col).strip().replace('\t', '').replace('\n', '').replace(' ', '').replace('\ufeff', '')
+        for p in possible_names:
+            target = p.lower().replace(' ', '')
+            if target in clean_col.lower():
                 return col
     return None
 
@@ -123,7 +133,6 @@ def index():
     today_activity = db.session.query(func.sum(DailyStat.total_activity)).filter(DailyStat.date == today).scalar() or 0.0
     today_orders = db.session.query(func.sum(Shipment.quantity)).filter(Shipment.date == today).scalar() or 0
     today_settlement = db.session.query(func.sum(Settlement.sales_income)).filter(Settlement.account_date == today).scalar() or 0.0
-    
     total_all_activity = db.session.query(func.sum(DailyStat.total_activity)).scalar() or 0.0
     total_all_settled = db.session.query(func.sum(Settlement.sales_income)).scalar() or 0.0
     total_pending = total_all_activity - total_all_settled
@@ -153,18 +162,18 @@ def shipment():
     shop_filter = request.args.get('shop_name', '所有店铺')
     today = date.today()
     year = request.args.get('year', type=int, default=today.year)
-    month = int(request.args.get('month')) if request.args.get('month') and request.args.get('month')!='0' else None
-    day = int(request.args.get('day')) if request.args.get('day') and request.args.get('day')!='0' else None
+    month_str = request.args.get('month', '')
+    month = int(month_str) if month_str and month_str != '0' else None
+    day_str = request.args.get('day', '')
+    day = int(day_str) if day_str and day_str != '0' else None
     
     filters = [extract('year', Shipment.date) == year]
     if month: filters.append(extract('month', Shipment.date) == month)
     if day: filters.append(extract('day', Shipment.date) == day)
     if shop_filter != '所有店铺': filters.append(Shipment.shop_name == shop_filter)
 
-    if not month:
-        trend_q = db.session.query(func.strftime('%Y-%m', Shipment.date).label('d'), func.sum(Shipment.quantity)).filter(and_(*filters)).group_by('d')
-    else:
-        trend_q = db.session.query(Shipment.date, func.sum(Shipment.quantity)).filter(and_(*filters)).group_by(Shipment.date)
+    if not month: trend_q = db.session.query(func.strftime('%Y-%m', Shipment.date).label('d'), func.sum(Shipment.quantity)).filter(and_(*filters)).group_by('d')
+    else: trend_q = db.session.query(Shipment.date, func.sum(Shipment.quantity)).filter(and_(*filters)).group_by(Shipment.date)
     
     trend_data = trend_q.all()
     if not month: trend_dates = [str(d[0]) for d in trend_data]
@@ -175,6 +184,8 @@ def shipment():
     s_data = dist_q.all(); shop_labels = [s[0] for s in s_data]; shop_values = [s[1] for s in s_data]
 
     daily_data = []
+    
+    # 列表数据逻辑 (月报 vs 日报)
     if month is None:
         ship_rows = db.session.query(extract('month', Shipment.date).label('m'), func.sum(Shipment.quantity).label('qty'), func.sum(Shipment.declared_price_total).label('dec'), func.sum(Shipment.cost_price_total).label('cost')).filter(and_(*filters)).group_by('m').all()
         ds_filters = [extract('year', DailyStat.date) == year]
@@ -192,7 +203,7 @@ def shipment():
         for m in sorted(monthly_map.keys(), reverse=True):
             if monthly_map[m]['total_quantity'] > 0 or monthly_map[m]['total_activity'] > 0: daily_data.append(monthly_map[m])
     else:
-        shipment_query = db.session.query(Shipment.date, func.sum(Shipment.quantity).label('total_quantity'), func.sum(Shipment.declared_price_total).label('total_declared'), func.sum(Shipment.cost_price_total).label('total_cost')).filter(and_(*filters)).group_by(Shipment.date).order_by(Shipment.date.desc())
+        shipment_query = db.session.query(Shipment.date, func.sum(Shipment.quantity).label('total_quantity'), func.sum(Shipment.declared_price_total).label('total_declared'), func.sum(Shipment.cost_price_total).label('total_cost')).filter(and_(*filters)).group_by(Shipment.date).order_by(desc(Shipment.date))
         pagination = shipment_query.paginate(page=page, per_page=31)
         for item in pagination.items:
             if shop_filter == '所有店铺': daily_stat = db.session.query(func.sum(DailyStat.total_activity).label('total_activity'), func.sum(DailyStat.total_service).label('total_service'), func.sum(DailyStat.total_ad).label('total_ad'), func.sum(DailyStat.delivery_fine).label('delivery_fine'), func.sum(DailyStat.total_cost).label('total_cost')).filter(DailyStat.date == item.date).first()
@@ -201,22 +212,25 @@ def shipment():
             if shop_filter != '所有店铺': settle_q = settle_q.filter(Settlement.shop_name == shop_filter)
             settlement_stats = settle_q.first()
             calc_cost = item.total_cost or 0.0; manual_cost = (daily_stat.total_cost or 0.0) if daily_stat else 0.0
-            daily_data.append({'date': item.date, 'total_quantity': item.total_quantity or 0, 'total_declared': item.total_declared or 0.0, 'total_cost': manual_cost if manual_cost > 0 else calc_cost, 'total_service': (daily_stat.total_service or 0.0) if daily_stat else 0.0, 'total_activity': (daily_stat.total_activity or 0.0) if daily_stat else 0.0, 'total_fine': (settlement_stats.today_fine or 0.0), 'total_refund': abs(settlement_stats.today_refund or 0.0), 'total_ad': (daily_stat.total_ad or 0.0) if daily_stat else 0.0})
+            t_cost = manual_cost if manual_cost > 0 else calc_cost
+            daily_data.append({'date': item.date, 'total_quantity': item.total_quantity or 0, 'total_declared': item.total_declared or 0.0, 'total_cost': t_cost, 'total_service': (daily_stat.total_service or 0.0) if daily_stat else 0.0, 'total_activity': (daily_stat.total_activity or 0.0) if daily_stat else 0.0, 'total_fine': (settlement_stats.today_fine or 0.0), 'total_refund': abs(settlement_stats.today_refund or 0.0), 'total_ad': (daily_stat.total_ad or 0.0) if daily_stat else 0.0})
 
     sum_data = {'quantity':0,'declared':0,'cost':0,'service':0,'activity':0,'fine':0,'refund':0,'gross_profit':0,'ad':0}
     for row in daily_data:
-        row['gross_profit'] = row['total_activity'] - row['total_cost'] - row['total_service'] - row['total_fine'] - row['total_refund'] - row['total_ad']
-        row['roi'] = row['gross_profit'] / row['total_cost'] if row['total_cost'] > 0 else 0.0
-        t_q=row['total_quantity']; t_d=row['total_declared']; t_act=row['total_activity']
+        t_cost, t_srv, t_fine, t_ref, t_ad = float(row['total_cost']), float(row['total_service']), float(row['total_fine']), float(row['total_refund']), float(row['total_ad'])
+        t_act = float(row['total_activity'])
+        row['gross_profit'] = t_act - t_cost - t_srv - t_fine - t_ref - t_ad
+        row['roi'] = row['gross_profit'] / t_cost if t_cost else 0.0
+        t_q=row['total_quantity']; t_d=row['total_declared']
         row['declared_per_ticket'] = (t_d/t_q) if t_q else 0
         row['profit_per_ticket'] = (row['gross_profit']/t_q) if t_q else 0
-        row['refund_rate'] = (row['total_refund']/t_act) if t_act else 0
-        row['ad_sales_ratio'] = (row['total_ad']/t_act) if t_act else 0
-        row['ad_profit_ratio'] = (row['total_ad']/row['gross_profit']) if row['gross_profit'] else 0
-        row['cost_sales_ratio'] = (row['total_cost']/t_act) if t_act else 0
+        row['refund_rate'] = (t_ref/t_act) if t_act else 0
+        row['ad_sales_ratio'] = (t_ad/t_act) if t_act else 0
+        row['ad_profit_ratio'] = (t_ad/row['gross_profit']) if row['gross_profit'] else 0
+        row['cost_sales_ratio'] = (t_cost/t_act) if t_act else 0
         row['sales_profit_rate'] = (row['gross_profit']/t_act) if t_act else 0
         row['actual_discount_rate'] = (t_act/t_d) if t_d else 0
-        sum_data['quantity']+=t_q; sum_data['declared']+=t_d; sum_data['cost']+=row['total_cost']; sum_data['service']+=row['total_service']; sum_data['activity']+=t_act; sum_data['fine']+=row['total_fine']; sum_data['refund']+=row['total_refund']; sum_data['gross_profit']+=row['gross_profit']; sum_data['ad']+=row['total_ad']
+        sum_data['quantity']+=t_q; sum_data['declared']+=t_d; sum_data['cost']+=t_cost; sum_data['service']+=t_srv; sum_data['activity']+=t_act; sum_data['fine']+=t_fine; sum_data['refund']+=t_ref; sum_data['gross_profit']+=row['gross_profit']; sum_data['ad']+=t_ad
 
     if daily_data:
         s=sum_data
@@ -263,7 +277,9 @@ def upload_shipment():
             col_specs = find_column(df.columns, ['商品属性集', '规格', 'SKU属性'])
             col_qty = find_column(df.columns, ['总发货件数', '数量', '件数', 'Quantity'])
             col_shop = find_column(df.columns, ['店铺', '店铺名称'])
-            if not col_order: continue
+            if not col_order: 
+                db.session.rollback(); upload_rec.row_count = -1; db.session.commit(); flash(f"文件 {file.filename} 上传失败：未找到关键列 '备货单/订单号'！", 'error'); continue
+
             df[col_order] = df[col_order].ffill()
             if col_shop: df[col_shop] = df[col_shop].ffill()
             count = 0
@@ -286,23 +302,29 @@ def upload_shipment():
                     if existing: continue
                 ship_date = extract_date_from_order(order_no)
                 current_shop = row[col_shop] if col_shop and pd.notna(row[col_shop]) else shop_name_selected
-                if not current_shop or str(current_shop).lower() == 'nan': current_shop = "未知店铺"
+                if not current_shop or str(current_shop).lower() == 'nan': current_shop = shop_name_selected
                 spu_val = str(row[col_spu]) if col_spu and pd.notna(row[col_spu]) else ''
                 skc_val = str(row[col_skc]) if col_skc and pd.notna(row[col_skc]) else ''
                 specs_val = str(row[col_specs]) if col_specs and pd.notna(row[col_specs]) else ''
-                product_record = Product.query.filter_by(shop_name=current_shop, spu_id=spu_val, skc_id=skc_val, specs=specs_val).first()
+                
+                product_record = Product.query.filter_by(shop_name=shop_name_selected, spu_id=spu_val, skc_id=skc_val, specs=specs_val).first()
                 unit_declared_price, unit_cost_price = 0.0, 0.0
                 if not product_record:
-                    new_product = Product(shop_name=current_shop, spu_id=spu_val, skc_id=skc_val, name=goods_name, specs=specs_val)
+                    # 继承价格逻辑
+                    sibling = Product.query.filter_by(shop_name=shop_name_selected, skc_id=skc_val).filter(or_(Product.declared_price > 0, Product.cost_price > 0)).first()
+                    if sibling:
+                        unit_declared_price = sibling.declared_price
+                        unit_cost_price = sibling.cost_price
+                    new_product = Product(shop_name=shop_name_selected, spu_id=spu_val, skc_id=skc_val, name=goods_name, specs=specs_val, declared_price=unit_declared_price, cost_price=unit_cost_price)
                     db.session.add(new_product); db.session.flush() 
                 else:
                     unit_declared_price = product_record.declared_price; unit_cost_price = product_record.cost_price
-                new_shipment = Shipment(shop_name=current_shop, order_no=order_no, custom_sku=custom_sku_val, date=ship_date, spu_id=spu_val, skc_id=skc_val, goods_name=goods_name, specs=specs_val, quantity=qty_val, declared_price_total=unit_declared_price * qty_val, cost_price_total=unit_cost_price * qty_val, upload_id=upload_rec.id)
+                new_shipment = Shipment(shop_name=shop_name_selected, order_no=order_no, custom_sku=custom_sku_val, date=ship_date, spu_id=spu_val, skc_id=skc_val, goods_name=goods_name, specs=specs_val, quantity=qty_val, declared_price_total=unit_declared_price * qty_val, cost_price_total=unit_cost_price * qty_val, upload_id=upload_rec.id)
                 db.session.add(new_shipment)
                 count += 1
             upload_rec.row_count = count
         db.session.commit()
-    except Exception: db.session.rollback()
+    except Exception as e: db.session.rollback(); flash(f"上传失败: {str(e)}", 'error')
     return redirect(url_for('shipment'))
 
 @app.route('/settlement')
@@ -311,15 +333,19 @@ def settlement():
     shop_filter = request.args.get('shop_name', '所有店铺')
     today = date.today()
     year = request.args.get('year', type=int, default=today.year)
-    month = int(request.args.get('month')) if request.args.get('month') and request.args.get('month')!='0' else None
-    day = int(request.args.get('day')) if request.args.get('day') and request.args.get('day')!='0' else None
+    month_str = request.args.get('month', '')
+    month = int(month_str) if month_str and month_str != '0' else None
+    day_str = request.args.get('day', '')
+    day = int(day_str) if day_str and day_str != '0' else None
 
     filters = [extract('year', Settlement.account_date) == year]
     if month: filters.append(extract('month', Settlement.account_date) == month)
     if day: filters.append(extract('day', Settlement.account_date) == day)
     if shop_filter != '所有店铺': filters.append(Settlement.shop_name == shop_filter)
 
-    trend_q = db.session.query(func.strftime('%Y-%m' if not month else '%Y-%m-%d', Settlement.account_date).label('d'), func.sum(Settlement.sales_income)).filter(and_(*filters)).group_by('d')
+    if not month: trend_q = db.session.query(func.strftime('%Y-%m', Settlement.account_date).label('d'), func.sum(Settlement.sales_income)).filter(and_(*filters)).group_by('d')
+    else: trend_q = db.session.query(func.strftime('%Y-%m-%d', Settlement.account_date).label('d'), func.sum(Settlement.sales_income)).filter(and_(*filters)).group_by('d')
+    
     t_data = trend_q.all(); trend_dates=[d[0] for d in t_data]; trend_income=[d[1] for d in t_data]
 
     total_inc = sum(trend_income)
@@ -328,62 +354,76 @@ def settlement():
     if shop_filter != '所有店铺': ref_q=ref_q.filter(Settlement.shop_name == shop_filter); fine_q=fine_q.filter(Settlement.shop_name == shop_filter)
     total_refund = ref_q.scalar() or 0.0; total_fine = fine_q.scalar() or 0.0
     
-    settlement_query = db.session.query(
-        Settlement.account_date,
-        func.sum(Settlement.sales_income).label('total_income'),
-        func.sum(Settlement.sales_refund).label('total_refund'),
-        func.sum(Settlement.subsidy).label('total_subsidy'),
-        func.sum(Settlement.platform_fine).label('total_fine'),
-        func.count(Settlement.id).label('settlement_count')
-    ).filter(and_(*filters)).group_by(Settlement.account_date).order_by(Settlement.account_date.desc())
-    
-    pagination = settlement_query.paginate(page=page, per_page=31)
-    
     report_data = []
-    sum_data = {'ship_qty':0,'ship_declared':0,'activity_price':0,'ship_cost':0,'service_fee':0,'ad_cost':0,'settle_count':0,'settle_amount':0,'consumer_refund':0,'subsidy':0,'after_sales_fine':0,'delivery_fine':0,'gross_profit':0}
+    
+    if month is None:
+        # 月报模式
+        rows = db.session.query(extract('month', Settlement.account_date).label('m'), func.sum(Settlement.sales_income).label('inc'), func.sum(Settlement.sales_refund).label('ref'), func.sum(Settlement.subsidy).label('sub'), func.sum(Settlement.platform_fine).label('fine'), func.count(Settlement.id).label('cnt')).filter(and_(*filters)).group_by('m').all()
+        s_filt = [extract('year', Shipment.date) == year]; 
+        if shop_filter!='所有店铺': s_filt.append(Shipment.shop_name == shop_filter)
+        s_rows = db.session.query(extract('month', Shipment.date).label('m'), func.sum(Shipment.quantity).label('qty'), func.sum(Shipment.declared_price_total).label('dec'), func.sum(Shipment.cost_price_total).label('cost')).filter(and_(*s_filt)).group_by('m').all()
+        d_filt = [extract('year', DailyStat.date) == year];
+        if shop_filter!='所有店铺': d_filt.append(DailyStat.shop_name == shop_filter)
+        d_rows = db.session.query(extract('month', DailyStat.date).label('m'), func.sum(DailyStat.total_activity).label('act'), func.sum(DailyStat.total_service).label('srv'), func.sum(DailyStat.total_ad).label('ad'), func.sum(DailyStat.delivery_fine).label('dfine')).filter(and_(*d_filt)).group_by('m').all()
 
-    for item in pagination.items:
-        date_obj = item.account_date
-        if shop_filter == '所有店铺':
-            daily_stat = db.session.query(func.sum(DailyStat.total_activity).label('total_activity'), func.sum(DailyStat.total_service).label('total_service'), func.sum(DailyStat.total_ad).label('total_ad'), func.sum(DailyStat.delivery_fine).label('delivery_fine'), func.sum(DailyStat.total_cost).label('total_cost')).filter(DailyStat.date == date_obj).first()
-        else:
-            daily_stat = DailyStat.query.filter_by(date=date_obj, shop_name=shop_filter).first()
+        m_map = {m:{'date':f"{year}年{m}月",'ship_qty':0,'ship_declared':0,'ship_cost':0,'activity_price':0,'service_fee':0,'ad_cost':0,'settle_count':0,'settle_amount':0,'consumer_refund':0,'subsidy':0,'after_sales_fine':0,'delivery_fine':0} for m in range(1,13)}
+        for r in rows: d=m_map[int(r.m)]; d.update({'settle_count':r.cnt,'settle_amount':r.inc or 0,'consumer_refund':abs(r.ref or 0),'subsidy':r.sub or 0,'after_sales_fine':abs(r.fine or 0)})
+        for r in s_rows: d=m_map[int(r.m)]; d.update({'ship_qty':r.qty or 0,'ship_declared':r.dec or 0,'ship_cost':r.cost or 0})
+        for r in d_rows: d=m_map[int(r.m)]; d.update({'activity_price':r.act or 0,'service_fee':r.srv or 0,'ad_cost':r.ad or 0,'delivery_fine':r.dfine or 0})
+            
+        pagination = None
+        for m in sorted(m_map.keys(), reverse=True):
+            d = m_map[m]
+            if d['settle_amount']==0 and d['ship_qty']==0: continue
+            
+            gp = d['settle_amount'] - d['ad_cost'] - d['ship_cost'] - d['service_fee'] - d['consumer_refund'] - d['subsidy'] - d['after_sales_fine'] - d['delivery_fine']
+            d.update({
+                'gross_profit': gp,
+                'roi': gp/(d['ship_cost']+d['service_fee']) if (d['ship_cost']+d['service_fee']) else 0,
+                'activity_discount': d['activity_price']/d['ship_declared'] if d['ship_declared'] else 0,
+                'settle_count_ratio': d['settle_count']/d['ship_qty'] if d['ship_qty'] else 0,
+                'settle_amount_discount': d['settle_amount']/d['ship_declared'] if d['ship_declared'] else 0,
+                'settle_amount_progress': d['settle_amount']/d['activity_price'] if d['activity_price'] else 0,
+                'declared_per_ticket': d['ship_declared']/d['ship_qty'] if d['ship_qty'] else 0,
+                'profit_per_ticket': gp/d['ship_qty'] if d['ship_qty'] else 0,
+                'discount_diff': 0, 'refund_rate': d['consumer_refund']/d['settle_amount'] if d['settle_amount'] else 0,
+                'after_sales_rate': d['after_sales_fine']/d['settle_amount'] if d['settle_amount'] else 0,
+                'delivery_fine_rate': d['delivery_fine']/d['settle_amount'] if d['settle_amount'] else 0
+            })
+            report_data.append(d)
+    else:
+        # 日报模式
+        settlement_query = db.session.query(Settlement.account_date, func.sum(Settlement.sales_income).label('total_income'), func.sum(Settlement.sales_refund).label('total_refund'), func.sum(Settlement.subsidy).label('total_subsidy'), func.sum(Settlement.platform_fine).label('total_fine'), func.count(Settlement.id).label('settlement_count')).filter(and_(*filters)).group_by(Settlement.account_date).order_by(desc(Settlement.account_date))
+        pagination = settlement_query.paginate(page=page, per_page=31)
+        for item in pagination.items:
+            date_obj = item.account_date
+            if shop_filter == '所有店铺': daily_stat = db.session.query(func.sum(DailyStat.total_activity).label('total_activity'), func.sum(DailyStat.total_service).label('total_service'), func.sum(DailyStat.total_ad).label('total_ad'), func.sum(DailyStat.delivery_fine).label('delivery_fine'), func.sum(DailyStat.total_cost).label('total_cost')).filter(DailyStat.date == date_obj).first()
+            else: daily_stat = DailyStat.query.filter_by(date=date_obj, shop_name=shop_filter).first()
+            ship_q = db.session.query(func.sum(Shipment.quantity).label('qty'), func.sum(Shipment.declared_price_total).label('declared'), func.sum(Shipment.cost_price_total).label('cost')).filter(Shipment.date == date_obj)
+            if shop_filter != '所有店铺': ship_q = ship_q.filter(Shipment.shop_name == shop_filter)
+            ship_stat = ship_q.first()
+            s_inc=item.total_income or 0; s_ref=abs(item.total_refund or 0); s_sub=item.total_subsidy or 0; s_fine=abs(item.total_fine or 0); s_cnt=item.settlement_count or 0
+            s_qty=ship_stat.qty or 0; s_dec=ship_stat.declared or 0
+            
+            # 手动成本
+            calc_cost = ship_stat.cost or 0.0
+            manual_cost = (daily_stat.total_cost or 0.0) if daily_stat else 0.0
+            ship_cost = manual_cost if manual_cost > 0 else calc_cost
 
-        ship_q = db.session.query(func.sum(Shipment.quantity).label('qty'), func.sum(Shipment.declared_price_total).label('declared'), func.sum(Shipment.cost_price_total).label('cost')).filter(Shipment.date == date_obj)
-        if shop_filter != '所有店铺': ship_q = ship_q.filter(Shipment.shop_name == shop_filter)
-        ship_stat = ship_q.first()
-        
-        s_inc=item.total_income or 0; s_ref=abs(item.total_refund or 0); s_sub=item.total_subsidy or 0; s_fine=abs(item.total_fine or 0); s_cnt=item.settlement_count or 0
-        s_qty=ship_stat.qty or 0; s_dec=ship_stat.declared or 0; s_cost=ship_stat.cost or 0
-        
-        calc_cost = ship_stat.cost or 0.0
-        manual_cost = (daily_stat.total_cost or 0.0) if daily_stat else 0.0
-        ship_cost = manual_cost if manual_cost > 0 else calc_cost
-
-        d_ad=(daily_stat.total_ad or 0.0) if daily_stat else 0; d_srv=(daily_stat.total_service or 0.0) if daily_stat else 0; d_act=(daily_stat.total_activity or 0.0) if daily_stat else 0; d_dfine=(daily_stat.delivery_fine or 0.0) if daily_stat else 0
-        
-        gp = s_inc - d_ad - ship_cost - d_srv - s_ref - s_sub - s_fine - d_dfine
-        
-        sum_data['ship_qty']+=s_qty; sum_data['ship_declared']+=s_dec; sum_data['activity_price']+=d_act; sum_data['ship_cost']+=ship_cost; sum_data['service_fee']+=d_srv; sum_data['ad_cost']+=d_ad
-        sum_data['settle_count']+=s_cnt; sum_data['settle_amount']+=s_inc; sum_data['consumer_refund']+=s_ref; sum_data['subsidy']+=s_sub; sum_data['after_sales_fine']+=s_fine; sum_data['delivery_fine']+=d_dfine; sum_data['gross_profit']+=gp
-        
-        report_data.append({
-            'date':date_obj, 'ship_qty':s_qty, 'ship_declared':s_dec, 'activity_price':d_act, 'activity_discount':d_act/s_dec if s_dec else 0,
-            'ship_cost':ship_cost, 'service_fee':d_srv, 'ad_cost':d_ad, 'settle_count':s_cnt, 'settle_count_ratio':s_cnt/s_qty if s_qty else 0,
-            'settle_amount':s_inc, 'settle_amount_discount':s_inc/s_dec if s_dec else 0, 'settle_amount_progress':s_inc/d_act if d_act else 0,
-            'consumer_refund':s_ref, 'subsidy':s_sub, 'after_sales_fine':s_fine, 'delivery_fine':d_dfine, 'gross_profit':gp, 'roi':gp/(ship_cost+d_srv) if (ship_cost+d_srv) else 0,
-            'declared_per_ticket':s_dec/s_qty if s_qty else 0, 'profit_per_ticket':gp/s_qty if s_qty else 0, 'discount_diff': (s_inc/s_dec - d_act/s_dec) if s_dec else 0,
-            'refund_rate':s_ref/s_inc if s_inc else 0, 'after_sales_rate':s_fine/s_inc if s_inc else 0, 'delivery_fine_rate':d_dfine/s_inc if s_inc else 0
-        })
+            d_ad=(daily_stat.total_ad or 0.0) if daily_stat else 0; d_srv=(daily_stat.total_service or 0.0) if daily_stat else 0; d_act=(daily_stat.total_activity or 0.0) if daily_stat else 0; d_dfine=(daily_stat.delivery_fine or 0.0) if daily_stat else 0
+            gp = s_inc - d_ad - ship_cost - d_srv - s_ref - s_sub - s_fine - d_dfine
+            
+            report_data.append({'date':date_obj, 'ship_qty':s_qty, 'ship_declared':s_dec, 'activity_price':d_act, 'activity_discount':d_act/s_dec if s_dec else 0, 'ship_cost':ship_cost, 'service_fee':d_srv, 'ad_cost':d_ad, 'settle_count':s_cnt, 'settle_count_ratio':s_cnt/s_qty if s_qty else 0, 'settle_amount':s_inc, 'settle_amount_discount':s_inc/s_dec if s_dec else 0, 'settle_amount_progress':s_inc/d_act if d_act else 0, 'consumer_refund':s_ref, 'subsidy':s_sub, 'after_sales_fine':s_fine, 'delivery_fine':d_dfine, 'gross_profit':gp, 'roi':gp/(ship_cost+d_srv) if (ship_cost+d_srv) else 0, 'declared_per_ticket':s_dec/s_qty if s_qty else 0, 'profit_per_ticket':gp/s_qty if s_qty else 0, 'discount_diff': (s_inc/s_dec - d_act/s_dec) if s_dec else 0, 'refund_rate':s_ref/s_inc if s_inc else 0, 'after_sales_rate':s_fine/s_inc if s_inc else 0, 'delivery_fine_rate':d_dfine/s_inc if s_inc else 0})
 
     if report_data:
-        sd=sum_data
+        sd={'ship_qty':0,'ship_declared':0,'activity_price':0,'ship_cost':0,'service_fee':0,'ad_cost':0,'settle_count':0,'settle_amount':0,'consumer_refund':0,'subsidy':0,'after_sales_fine':0,'delivery_fine':0,'gross_profit':0}
+        for r in report_data:
+            sd['ship_qty']+=r['ship_qty']; sd['ship_declared']+=r['ship_declared']; sd['activity_price']+=r['activity_price']; sd['ship_cost']+=r['ship_cost']; sd['service_fee']+=r['service_fee']; sd['ad_cost']+=r['ad_cost']; sd['settle_count']+=r['settle_count']; sd['settle_amount']+=r['settle_amount']; sd['consumer_refund']+=r['consumer_refund']; sd['subsidy']+=r['subsidy']; sd['after_sales_fine']+=r['after_sales_fine']; sd['delivery_fine']+=r['delivery_fine']; sd['gross_profit']+=r['gross_profit']
         summary={'date':'合计', 'is_summary':True, 'ship_qty':sd['ship_qty'], 'ship_declared':sd['ship_declared'], 'activity_price':sd['activity_price'], 'activity_discount':sd['activity_price']/sd['ship_declared'] if sd['ship_declared'] else 0, 'ship_cost':sd['ship_cost'], 'service_fee':sd['service_fee'], 'ad_cost':sd['ad_cost'], 'settle_count':sd['settle_count'], 'settle_count_ratio':sd['settle_count']/sd['ship_qty'] if sd['ship_qty'] else 0, 'settle_amount':sd['settle_amount'], 'settle_amount_discount':sd['settle_amount']/sd['ship_declared'] if sd['ship_declared'] else 0, 'settle_amount_progress':sd['settle_amount']/sd['activity_price'] if sd['activity_price'] else 0, 'consumer_refund':sd['consumer_refund'], 'subsidy':sd['subsidy'], 'after_sales_fine':sd['after_sales_fine'], 'delivery_fine':sd['delivery_fine'], 'gross_profit':sd['gross_profit'], 'roi':sd['gross_profit']/(sd['ship_cost']+sd['service_fee']) if (sd['ship_cost']+sd['service_fee']) else 0, 'declared_per_ticket':sd['ship_declared']/sd['ship_qty'] if sd['ship_qty'] else 0, 'profit_per_ticket':sd['gross_profit']/sd['ship_qty'] if sd['ship_qty'] else 0, 'discount_diff':0, 'refund_rate':sd['consumer_refund']/sd['settle_amount'] if sd['settle_amount'] else 0, 'after_sales_rate':sd['after_sales_fine']/sd['settle_amount'] if sd['settle_amount'] else 0, 'delivery_fine_rate':sd['delivery_fine']/sd['settle_amount'] if sd['settle_amount'] else 0}
         report_data.insert(0, summary)
     
     return render_template('settlement.html', title="结算明细", report_data=report_data, pagination=pagination, trend_dates=trend_dates, trend_income=trend_income, pie_data=[total_inc, abs(total_refund), abs(total_fine)], current_shop=shop_filter, selected_year=year, selected_month=month, selected_day=day)
 
-# [修改] 上传结算 - 增加错误处理和CSV修正
 @app.route('/settlement/upload', methods=['POST'])
 def upload_settlement():
     if 'file' not in request.files: return redirect(url_for('settlement'))
@@ -391,75 +431,118 @@ def upload_settlement():
     shop_name = request.form.get('shop_name')
     if not files or files[0].filename == '': return redirect(url_for('settlement'))
     
-    try:
-        def process_trans(df):
-            count = 0
-            col_order = find_column(df.columns, ['备货单号', '订单号'])
-            col_sku = find_column(df.columns, ['SKUID', 'SKU ID'])
-            col_type = find_column(df.columns, ['交易类型'])
-            col_amount = find_column(df.columns, ['金额', '发生金额'])
-            for index, row in df.iterrows():
-                if not col_order: continue
-                order_no = str(row[col_order]).strip()
-                trans_type = str(row[col_type]).strip() if col_type else ''
-                amount = float(row[col_amount]) if col_amount and pd.notna(row[col_amount]) else 0.0
-                sku_val = str(row[col_sku]) if col_sku and pd.notna(row[col_sku]) else ''
-                acc_date = extract_date_from_order(order_no)
-                exists = Settlement.query.filter_by(sku_id=sku_val, account_date=acc_date, trans_type=trans_type, order_no=order_no, amount=amount).first()
-                if exists: continue
-                s_income=0; s_refund=0; s_subsidy=0
-                if '售后' in trans_type or '冲回' in trans_type: s_refund = amount
-                elif '补贴' in trans_type: s_subsidy = amount
-                else: s_income = amount
-                new_rec = Settlement(shop_name=shop_name, order_no=order_no, sku_id=sku_val, account_date=acc_date, trans_type=trans_type, amount=amount, sales_income=s_income, sales_refund=s_refund, subsidy=s_subsidy, platform_fine=0, upload_id=upload_rec.id)
-                db.session.add(new_rec)
-                count += 1
-            return count
-
-        def process_fine(df):
-            count = 0
-            col_vid = find_column(df.columns, ['违规ID', '违规编号'])
-            col_sku_f = find_column(df.columns, ['SKUID'])
-            col_amt_f = find_column(df.columns, ['赔付金额', '扣款金额'])
-            col_date_f = find_column(df.columns, ['账务时间'])
-            for index, row in df.iterrows():
-                if not col_vid: continue
-                vid = str(row[col_vid]).strip()
-                if Settlement.query.filter_by(violation_id=vid).first(): continue
-                acc_date = pd.to_datetime(row[col_date_f]).date()
-                amt = float(row[col_amt_f]) if pd.notna(row[col_amt_f]) else 0.0
-                sku_val = str(row[col_sku_f]) if col_sku_f else ''
-                new_rec = Settlement(shop_name=shop_name, violation_id=vid, sku_id=sku_val, account_date=acc_date, trans_type='售后罚款', amount=amt, platform_fine=amt, upload_id=upload_rec.id)
-                db.session.add(new_rec)
-                count += 1
-            return count
-
-        for file in files:
-            if file.filename == '': continue
-            upload_rec = UploadRecord(filename=file.filename, shop_name=shop_name, upload_type='settlement', row_count=0)
-            db.session.add(upload_rec); db.session.flush()
-            
-            # [关键修复]：文件指针复位 + 多编码尝试
-            try:
-                if file.filename.endswith('.csv'):
-                    file.seek(0)
-                    try: df = pd.read_csv(file)
-                    except: file.seek(0); df = pd.read_csv(file, encoding='gbk')
-                    if find_column(df.columns, ['交易类型']): upload_rec.row_count = process_trans(df)
-                    elif find_column(df.columns, ['违规ID', '违规编号']): upload_rec.row_count = process_fine(df)
-                else:
-                    excel_file = pd.ExcelFile(file)
-                    if '交易结算' in excel_file.sheet_names: upload_rec.row_count += process_trans(pd.read_excel(file, sheet_name='交易结算'))
-                    if '消费者及履约保障-售后问题' in excel_file.sheet_names: upload_rec.row_count += process_fine(pd.read_excel(file, sheet_name='消费者及履约保障-售后问题'))
-            except Exception as e:
-                print(f"Error parsing file {file.filename}: {e}")
-                flash(f"解析错误: {file.filename}", 'error')
+    for file in files:
+        if file.filename == '': continue
         
-        db.session.commit()
-    except Exception as e: db.session.rollback(); flash(f"上传失败: {str(e)}", 'error')
+        try:
+            upload_rec = UploadRecord(filename=file.filename, shop_name=shop_name, upload_type='settlement', row_count=0)
+            db.session.add(upload_rec)
+            db.session.commit() 
+        except Exception as e:
+            flash(f"文件 {file.filename} 记录创建失败: {str(e)}", 'error')
+            continue
+
+        try:
+            def process_df(df, upload_rec_id, filename):
+                if find_column(df.columns, ['交易类型']):
+                    return process_trans(df, upload_rec_id)
+                elif find_column(df.columns, ['违规ID', '违规编号']):
+                    return process_fine(df, upload_rec_id)
+                else:
+                    return 0
+
+            def process_trans(df, upload_rec_id):
+                count = 0
+                col_order = find_column(df.columns, ['备货单号', '订单号', 'order_no'])
+                col_sku = find_column(df.columns, ['SKUID', 'SKU ID'])
+                col_type = find_column(df.columns, ['交易类型'])
+                # [核心修复] 优先匹配 '金额' 而不是 '单品券金额'
+                col_amount = find_column(df.columns, ['金额', '发生金额'])
+                if not col_amount: col_amount = find_column(df.columns, ['金额']) # 再次尝试
+
+                if not col_order or not col_sku or not col_type or not col_amount:
+                    return 0
+                
+                for index, row in df.iterrows():
+                    order_no = str(row[col_order]).strip() if col_order else ''
+                    trans_type = str(row[col_type]).strip() if col_type else ''
+                    amount = pd.to_numeric(row[col_amount], errors='coerce')
+                    if pd.isna(amount): amount = 0.0
+
+                    sku_val = str(row[col_sku]) if col_sku and pd.notna(row[col_sku]) else ''
+                    acc_date = extract_date_from_order(order_no)
+                    
+                    exists = Settlement.query.filter_by(sku_id=sku_val, account_date=acc_date, trans_type=trans_type, order_no=order_no, amount=amount).first()
+                    if exists: continue
+                    s_income=0; s_refund=0; s_subsidy=0
+                    if '售后' in trans_type or '冲回' in trans_type: s_refund = amount
+                    elif '补贴' in trans_type: s_subsidy = amount
+                    else: s_income = amount
+                    new_rec = Settlement(shop_name=shop_name, order_no=order_no, sku_id=sku_val, account_date=acc_date, trans_type=trans_type, amount=amount, sales_income=s_income, sales_refund=s_refund, subsidy=s_subsidy, platform_fine=0, upload_id=upload_rec_id)
+                    db.session.add(new_rec)
+                    count += 1
+                return count
+
+            def process_fine(df, upload_rec_id):
+                count = 0
+                col_vid = find_column(df.columns, ['违规ID', '违规编号'])
+                col_sku_f = find_column(df.columns, ['SKUID'])
+                col_amt_f = find_column(df.columns, ['赔付金额', '扣款金额'])
+                col_date_f = find_column(df.columns, ['账务时间'])
+                if not col_vid or not col_amt_f or not col_date_f:
+                     return 0
+                for index, row in df.iterrows():
+                    vid = str(row[col_vid]).strip()
+                    if Settlement.query.filter_by(violation_id=vid).first(): continue
+                    amt = pd.to_numeric(row[col_amt_f], errors='coerce')
+                    if pd.isna(amt): amt = 0.0
+                    try: acc_date = pd.to_datetime(row[col_date_f], errors='coerce').date()
+                    except: acc_date = date.today()
+                    sku_val = str(row[col_sku_f]) if col_sku_f and pd.notna(row[col_sku_f]) else ''
+                    new_rec = Settlement(shop_name=shop_name, violation_id=vid, sku_id=sku_val, account_date=acc_date, trans_type='售后罚款', amount=amt, platform_fine=amt, upload_id=upload_rec_id)
+                    db.session.add(new_rec)
+                    count += 1
+                return count
+            
+            # 读取文件
+            total_rows_processed = 0
+            if file.filename.endswith('.csv'):
+                file_content = file.read()
+                try: df = pd.read_csv(StringIO(file_content.decode('utf-8-sig')))
+                except: 
+                    try: df = pd.read_csv(StringIO(file_content.decode('gbk')))
+                    except: df = pd.read_csv(StringIO(file_content.decode('gb18030')))
+                total_rows_processed = process_df(df, upload_rec.id, file.filename)
+            else:
+                # 遍历所有 Sheet
+                file.seek(0)
+                excel_file = pd.ExcelFile(file)
+                for sheet_name in excel_file.sheet_names:
+                    try:
+                        df = pd.read_excel(excel_file, sheet_name=sheet_name)
+                        total_rows_processed += process_df(df, upload_rec.id, file.filename)
+                    except: pass
+            
+            if total_rows_processed > 0:
+                upload_rec.row_count = total_rows_processed
+                db.session.commit()
+                flash(f"文件 {file.filename} 上传成功，新增 {total_rows_processed} 条记录。", 'success')
+            else:
+                upload_rec.row_count = -1
+                db.session.commit()
+                flash(f"文件 {file.filename} 解析失败或无有效数据。", 'error')
+                
+        except Exception as e:
+            db.session.rollback()
+            rec = db.session.get(UploadRecord, upload_rec.id)
+            if rec:
+                rec.row_count = -1 
+                db.session.commit()
+            flash(f"文件 {file.filename} 处理失败: {str(e)}", 'error')
+            
     return redirect(url_for('settlement'))
 
-# ... (Files, Product, search, clear_data, main 等代码与之前一致，请务必保留)
+# ... (files, delete_file, product, update_product_price, search, clear_data 保持不变) ...
 @app.route('/files')
 def files():
     records = UploadRecord.query.order_by(UploadRecord.upload_date.desc()).all()
@@ -563,7 +646,7 @@ def clear_data():
         db.session.query(Settlement).delete()
         db.session.query(Product).delete()
         db.session.query(DailyStat).delete()
-        db.session.query(UploadRecord).delete() # 清空记录
+        db.session.query(UploadRecord).delete()
         db.session.commit()
         return jsonify({'status': 'success', 'msg': '已清空'})
     except Exception as e: return jsonify({'status': 'error', 'msg': str(e)})

@@ -6,7 +6,7 @@
     <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row items-center justify-between gap-4">
         <div>
             <h2 class="text-xl font-bold text-gray-800 tracking-tight">商品价格管理</h2>
-            <p class="text-sm text-gray-500 mt-1">管理各店铺 SKU 的申报价与采购价，用于自动计算利润</p>
+            <p class="text-sm text-gray-500 mt-1">管理各店铺 SKU 的申报价与采购价</p>
         </div>
         
         <form method="GET" action="/product" class="flex flex-wrap items-center gap-2 bg-gray-50 p-1.5 rounded-lg border border-gray-200">
@@ -22,17 +22,11 @@
                 <option value="点小饿" {% if current_shop == '点小饿' %}selected{% endif %}>点小饿</option>
                 <option value="扶风" {% if current_shop == '扶风' %}selected{% endif %}>扶风</option>
             </select>
-
             <div class="h-6 w-px bg-gray-300 mx-1 hidden md:block"></div>
-
             <div class="relative flex items-center">
-                <input type="text" name="q" value="{{ search_keyword }}" placeholder="搜 SPU / SKC / 名称" 
-                       class="border-none bg-white rounded-md text-sm py-2 pl-3 pr-8 shadow-sm focus:ring-2 focus:ring-blue-500 w-40 md:w-48 placeholder-gray-400">
-                <button type="submit" class="absolute right-1 p-1 text-gray-400 hover:text-blue-600 transition-colors">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                </button>
+                <input type="text" name="q" value="{{ search_keyword }}" placeholder="搜 SPU / SKC" class="border-none bg-white rounded-md text-sm py-2 pl-3 pr-8 shadow-sm focus:ring-2 focus:ring-blue-500 w-40 md:w-48 placeholder-gray-400">
+                <button type="submit" class="absolute right-1 p-1 text-gray-400 hover:text-blue-600 transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg></button>
             </div>
-            
             {% if filter_missing %}
             <input type="hidden" name="filter_missing" value="true">
             <a href="{{ url_for('product', shop_name=current_shop) }}" class="ml-2 text-xs text-gray-500 hover:text-red-500 underline">退出筛选</a>
@@ -43,28 +37,14 @@
     {% if missing_count > 0 %}
     <div class="bg-orange-50 border border-orange-100 rounded-lg p-4 flex items-center justify-between">
         <div class="flex items-center gap-3">
-            <div class="p-2 bg-orange-100 rounded-full text-orange-600">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-            </div>
-            <div>
-                <h3 class="text-sm font-bold text-gray-800">有 {{ missing_count }} 个商品规格尚未录入价格</h3>
-                <p class="text-xs text-gray-500 mt-0.5">未录入价格会导致毛利计算不准确。</p>
-            </div>
+            <div class="p-2 bg-orange-100 rounded-full text-orange-600"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg></div>
+            <div><h3 class="text-sm font-bold text-gray-800">有 {{ missing_count }} 个商品规格尚未录入价格</h3><p class="text-xs text-gray-500 mt-0.5">未录入价格会导致毛利计算不准确。</p></div>
         </div>
-        {% if not filter_missing %}
-        <a href="{{ url_for('product', shop_name=current_shop, filter_missing='true') }}" class="bg-orange-100 text-orange-700 px-4 py-2 rounded-md text-sm font-medium hover:bg-orange-200 transition-colors">
-            只看这些商品
-        </a>
-        {% else %}
-        <span class="text-xs text-orange-400 font-medium">正在筛选中...</span>
-        {% endif %}
+        {% if not filter_missing %}<a href="{{ url_for('product', shop_name=current_shop, filter_missing='true') }}" class="bg-orange-100 text-orange-700 px-4 py-2 rounded-md text-sm font-medium hover:bg-orange-200 transition-colors">只看这些商品</a>
+        {% else %}<span class="text-xs text-orange-400 font-medium">正在筛选中...</span>{% endif %}
     </div>
     {% elif filter_missing %}
-    <div class="bg-green-50 border border-green-100 rounded-lg p-6 text-center">
-        <div class="text-green-500 text-xl mb-2">🎉 太棒了！</div>
-        <p class="text-gray-600 text-sm">当前店铺所有商品价格已全部补齐。</p>
-        <a href="{{ url_for('product', shop_name=current_shop) }}" class="inline-block mt-4 text-blue-600 hover:underline text-sm">返回全部列表</a>
-    </div>
+    <div class="bg-green-50 border border-green-100 rounded-lg p-6 text-center"><div class="text-green-500 text-xl mb-2">🎉 太棒了！</div><p class="text-gray-600 text-sm">当前店铺所有商品价格已全部补齐。</p><a href="{{ url_for('product', shop_name=current_shop) }}" class="inline-block mt-4 text-blue-600 hover:underline text-sm">返回全部列表</a></div>
     {% endif %}
 
     <div class="space-y-4">
@@ -73,11 +53,10 @@
             <div class="px-6 py-4 bg-gray-50/50 border-b border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-2">
                 <div class="flex items-center gap-3 overflow-hidden">
                     <span class="flex-shrink-0 px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700 border border-blue-200">{{ group.shop_name }}</span>
-                    <h3 class="font-bold text-gray-800 text-sm truncate" title="{{ group.name }}">{{ group.name }}</h3>
-                </div>
-                <div class="flex-shrink-0 flex items-center gap-4 text-xs text-gray-400 font-mono">
-                    <span title="SPU ID">SPU: <span class="text-gray-600 font-bold">{{ group.spu_id|string|replace('.0', '') }}</span></span>
-                    <span title="SKC ID" class="hidden sm:inline">SKC: {{ group.skc_id|string|replace('.0', '') }}</span>
+                    <div class="flex-shrink-0 flex items-center gap-4 text-sm text-gray-600 font-mono">
+                         <span title="SPU ID">SPU: <span class="font-bold text-gray-900">{{ group.spu_id|string|replace('.0', '') }}</span></span>
+                         <span title="SKC ID">SKC: <span class="font-bold text-gray-900">{{ group.skc_id|string|replace('.0', '') }}</span></span>
+                    </div>
                 </div>
             </div>
 
@@ -92,34 +71,16 @@
                                     <span>{{ item.specs }}</span>
                                 </div>
                             </td>
-                            
                             <td class="py-3 px-4">
                                 <div class="flex items-center gap-2 justify-end">
                                     <span class="text-xs text-gray-400">申报价</span>
-                                    <div class="relative rounded-md shadow-sm">
-                                        <div class="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
-                                            <span class="text-gray-400 text-xs">¥</span>
-                                        </div>
-                                        <input type="number" step="0.01" value="{{ item.declared_price }}" 
-                                               onchange="updatePrice('{{ item.id }}', 'declared_price', this.value, this)"
-                                               data-field="declared"
-                                               class="w-24 text-sm pl-6 pr-2 py-1 bg-gray-50 border {{ 'border-red-300 bg-red-50' if item.declared_price == 0 else 'border-gray-200' }} rounded focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-right font-medium text-gray-700">
-                                    </div>
+                                    <div class="relative rounded-md shadow-sm"><div class="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none"><span class="text-gray-400 text-xs">¥</span></div><input type="number" step="0.01" value="{{ item.declared_price }}" onchange="updatePrice('{{ item.id }}', 'declared_price', this.value, this)" data-field="declared" class="w-24 text-sm pl-6 pr-2 py-1 bg-gray-50 border {{ 'border-red-300 bg-red-50' if item.declared_price == 0 else 'border-gray-200' }} rounded focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-right font-medium text-gray-700"></div>
                                 </div>
                             </td>
-                            
                             <td class="py-3 pl-4">
                                 <div class="flex items-center gap-2 justify-end">
                                     <span class="text-xs text-gray-400">采购价</span>
-                                    <div class="relative rounded-md shadow-sm">
-                                        <div class="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
-                                            <span class="text-gray-400 text-xs">¥</span>
-                                        </div>
-                                        <input type="number" step="0.01" value="{{ item.cost_price }}" 
-                                               onchange="updatePrice('{{ item.id }}', 'cost_price', this.value, this)"
-                                               data-field="cost"
-                                               class="w-24 text-sm pl-6 pr-2 py-1 bg-gray-50 border {{ 'border-red-300 bg-red-50' if item.cost_price == 0 else 'border-gray-200' }} rounded focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-right font-medium text-gray-700">
-                                    </div>
+                                    <div class="relative rounded-md shadow-sm"><div class="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none"><span class="text-gray-400 text-xs">¥</span></div><input type="number" step="0.01" value="{{ item.cost_price }}" onchange="updatePrice('{{ item.id }}', 'cost_price', this.value, this)" data-field="cost" class="w-24 text-sm pl-6 pr-2 py-1 bg-gray-50 border {{ 'border-red-300 bg-red-50' if item.cost_price == 0 else 'border-gray-200' }} rounded focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-right font-medium text-gray-700"></div>
                                 </div>
                             </td>
                         </tr>
@@ -130,17 +91,7 @@
         </div>
         {% else %}
             {% if not filter_missing %}
-            <div class="flex flex-col items-center justify-center py-16 bg-white rounded-xl border-2 border-dashed border-gray-200">
-                <div class="p-4 bg-gray-50 rounded-full mb-4">
-                    <svg class="h-8 w-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path></svg>
-                </div>
-                <h3 class="text-base font-medium text-gray-900">未找到商品</h3>
-                {% if search_keyword %}
-                    <p class="mt-1 text-sm text-gray-500">搜索 "<span class="font-bold">{{ search_keyword }}</span>" 无结果。</p>
-                {% else %}
-                    <p class="mt-1 text-sm text-gray-500">请先在“发货明细”中上传Excel发货单。</p>
-                {% endif %}
-            </div>
+            <div class="flex flex-col items-center justify-center py-16 bg-white rounded-xl border-2 border-dashed border-gray-200"><div class="p-4 bg-gray-50 rounded-full mb-4"><svg class="h-8 w-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path></svg></div><h3 class="text-base font-medium text-gray-900">未找到商品</h3>{% if search_keyword %}<p class="mt-1 text-sm text-gray-500">搜索 "<span class="font-bold">{{ search_keyword }}</span>" 无结果。</p>{% else %}<p class="mt-1 text-sm text-gray-500">请先在“发货明细”中上传Excel发货单。</p>{% endif %}</div>
             {% endif %}
         {% endfor %}
     </div>
@@ -148,106 +99,40 @@
     {% if pagination.pages > 1 %}
     <div class="flex items-center justify-between bg-white px-6 py-4 border border-gray-200 rounded-xl shadow-sm">
         <div class="flex-1 flex justify-between sm:hidden">
-            {% if pagination.has_prev %}
-            <a href="{{ url_for('product', page=pagination.prev_num, shop_name=current_shop, q=search_keyword, filter_missing=filter_missing) }}" class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">上一页</a>
-            {% endif %}
-            {% if pagination.has_next %}
-            <a href="{{ url_for('product', page=pagination.next_num, shop_name=current_shop, q=search_keyword, filter_missing=filter_missing) }}" class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">下一页</a>
-            {% endif %}
+            {% if pagination.has_prev %}<a href="{{ url_for('product', page=pagination.prev_num, shop_name=current_shop, q=search_keyword, filter_missing=filter_missing) }}" class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">上一页</a>{% endif %}
+            {% if pagination.has_next %}<a href="{{ url_for('product', page=pagination.next_num, shop_name=current_shop, q=search_keyword, filter_missing=filter_missing) }}" class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">下一页</a>{% endif %}
         </div>
         <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-            <div>
-                <p class="text-sm text-gray-700">
-                    共 <span class="font-medium">{{ pagination.total }}</span> 条商品
-                </p>
-            </div>
-            <div>
-                <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                    {% if pagination.has_prev %}
-                    <a href="{{ url_for('product', page=pagination.prev_num, shop_name=current_shop, q=search_keyword, filter_missing=filter_missing) }}" class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
-                        <span class="sr-only">上一页</span>
-                        <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>
-                    </a>
-                    {% endif %}
-                    <span class="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">第 {{ pagination.page }} 页</span>
-                    {% if pagination.has_next %}
-                    <a href="{{ url_for('product', page=pagination.next_num, shop_name=current_shop, q=search_keyword, filter_missing=filter_missing) }}" class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
-                        <span class="sr-only">下一页</span>
-                        <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" /></svg>
-                    </a>
-                    {% endif %}
-                </nav>
-            </div>
+            <div><p class="text-sm text-gray-700">共 <span class="font-medium">{{ pagination.total }}</span> 条商品</p></div>
+            <div><nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                {% if pagination.has_prev %}<a href="{{ url_for('product', page=pagination.prev_num, shop_name=current_shop, q=search_keyword, filter_missing=filter_missing) }}" class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"><span class="sr-only">上一页</span><svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" /></svg></a>{% endif %}
+                <span class="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">第 {{ pagination.page }} 页</span>
+                {% if pagination.has_next %}<a href="{{ url_for('product', page=pagination.next_num, shop_name=current_shop, q=search_keyword, filter_missing=filter_missing) }}" class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"><span class="sr-only">下一页</span><svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" /></svg></a>{% endif %}
+            </nav></div>
         </div>
     </div>
     {% endif %}
 
     <script>
-        // 传递后端状态给 JS
         const isFilterMode = {{ 'true' if filter_missing else 'false' }};
-
         async function updatePrice(id, field, value, inputElem) {
-            // UI 反馈
             inputElem.classList.add('bg-blue-50', 'text-blue-600');
-            
             try {
-                const res = await fetch('/product/update', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id: id, field: field, value: value })
-                });
+                const res = await fetch('/product/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id, field: field, value: value }) });
                 const data = await res.json();
                 if (data.status === 'success') {
-                    // 成功反馈
-                    inputElem.classList.remove('bg-blue-50', 'text-blue-600', 'border-red-300', 'bg-red-50');
-                    inputElem.classList.add('bg-green-50', 'text-green-600', 'border-green-300');
-                    
-                    // 检查是否在“只看未填”模式下，如果是，且都填完了，移除该行
+                    inputElem.classList.remove('bg-blue-50', 'text-blue-600', 'border-red-300', 'bg-red-50'); inputElem.classList.add('bg-green-50', 'text-green-600', 'border-green-300');
                     if (isFilterMode) {
                         const row = inputElem.closest('tr');
                         const declaredInput = row.querySelector('input[data-field="declared"]');
                         const costInput = row.querySelector('input[data-field="cost"]');
-                        
-                        // 检查两个输入框的值是否都 > 0
                         if (parseFloat(declaredInput.value) > 0 && parseFloat(costInput.value) > 0) {
-                            // 动画移除效果
-                            setTimeout(() => {
-                                row.style.transition = 'all 0.5s ease';
-                                row.style.opacity = '0';
-                                row.style.transform = 'translateX(20px)';
-                                setTimeout(() => {
-                                    const tbody = row.closest('tbody');
-                                    row.remove();
-                                    // 如果这个卡片里的 SKU 都没了，把卡片也移除
-                                    if (tbody.children.length === 0) {
-                                        tbody.closest('.product-card').remove();
-                                        // 如果页面空了，刷新一下显示“完成”提示
-                                        if (document.querySelectorAll('.product-card').length === 0) {
-                                            location.reload();
-                                        }
-                                    }
-                                }, 500);
-                            }, 500);
+                            setTimeout(() => { row.style.transition = 'all 0.5s ease'; row.style.opacity = '0'; row.style.transform = 'translateX(20px)'; setTimeout(() => { const tbody = row.closest('tbody'); row.remove(); if (tbody.children.length === 0) { tbody.closest('.product-card').remove(); if (document.querySelectorAll('.product-card').length === 0) location.reload(); } }, 500); }, 500);
                         }
-                    } else {
-                        // 普通模式下，只需去掉红色边框
-                        if (parseFloat(value) > 0) {
-                            inputElem.classList.remove('border-red-300', 'bg-red-50');
-                            inputElem.classList.add('border-gray-200');
-                        }
-                    }
-
-                    setTimeout(() => {
-                        inputElem.classList.remove('bg-green-50', 'text-green-600', 'border-green-300');
-                    }, 1000);
-                } else {
-                    alert('保存失败: ' + data.msg);
-                    inputElem.classList.add('bg-red-50', 'border-red-300');
-                }
-            } catch (e) {
-                alert('网络错误，请刷新重试');
-                inputElem.classList.remove('bg-blue-50', 'text-blue-600');
-            }
+                    } else { if (parseFloat(value) > 0) { inputElem.classList.remove('border-red-300', 'bg-red-50'); inputElem.classList.add('border-gray-200'); } }
+                    setTimeout(() => { inputElem.classList.remove('bg-green-50', 'text-green-600', 'border-green-300'); }, 1000);
+                } else { alert('保存失败: ' + data.msg); inputElem.classList.add('bg-red-50', 'border-red-300'); }
+            } catch (e) { alert('网络错误，请刷新重试'); inputElem.classList.remove('bg-blue-50', 'text-blue-600'); }
         }
     </script>
 </div>
