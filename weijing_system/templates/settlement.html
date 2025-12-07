@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+
+{% block content %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<div class="space-y-8" x-data="{ showModal: false, editDate: '', editFine: 0, currentShop: '{{ current_shop }}' }">
+
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 space-y-4">
+        <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+            <div>
+                <h2 class="text-xl font-bold text-gray-800 tracking-tight">结算数据核对</h2>
+                <p class="text-sm text-gray-500 mt-1">核对各店铺实际回款、退款、罚款与广告支出</p>
+            </div>
+            
+            <form method="GET" action="/settlement" class="flex flex-wrap items-center gap-2 bg-green-50 p-2 rounded-lg border border-green-100">
+                <label class="text-xs font-bold text-green-700 uppercase px-1">店铺:</label>
+                <select name="shop_name" onchange="this.form.submit()" class="bg-white border-none text-xs font-medium text-gray-700 rounded shadow-sm focus:ring-1 focus:ring-green-500 py-1 pl-2 pr-6 cursor-pointer h-8">
+                    <option value="所有店铺" {% if current_shop == '所有店铺' %}selected{% endif %}>所有店铺</option>
+                    <option value="云企" {% if current_shop == '云企' %}selected{% endif %}>云企</option>
+                    <option value="鲸画" {% if current_shop == '鲸画' %}selected{% endif %}>鲸画</option>
+                    <option value="知己知彼" {% if current_shop == '知己知彼' %}selected{% endif %}>知己知彼</option>
+                    <option value="鼎银" {% if current_shop == '鼎银' %}selected{% endif %}>鼎银</option>
+                    <option value="德勤" {% if current_shop == '德勤' %}selected{% endif %}>德勤</option>
+                    <option value="淘小铺" {% if current_shop == '淘小铺' %}selected{% endif %}>淘小铺</option>
+                    <option value="维鲸" {% if current_shop == '维鲸' %}selected{% endif %}>维鲸</option>
+                    <option value="点小饿" {% if current_shop == '点小饿' %}selected{% endif %}>点小饿</option>
+                    <option value="扶风" {% if current_shop == '扶风' %}selected{% endif %}>扶风</option>
+                </select>
+                <div class="w-px h-4 bg-green-200 mx-1"></div>
+                <select name="year" onchange="this.form.submit()" class="bg-white border-none text-xs rounded h-8">{% for y in range(2023, 2026) %}<option value="{{ y }}" {% if selected_year == y %}selected{% endif %}>{{ y }}年</option>{% endfor %}</select>
+                <select name="month" onchange="this.form.submit()" class="bg-white border-none text-xs rounded h-8"><option value="0" {% if not selected_month %}selected{% endif %}>全年</option>{% for m in range(1, 13) %}<option value="{{ m }}" {% if selected_month == m %}selected{% endif %}>{{ m }}月</option>{% endfor %}</select>
+                <select name="day" onchange="this.form.submit()" class="bg-white border-none text-xs rounded h-8"><option value="0" {% if not selected_day %}selected{% endif %}>整月</option>{% for d in range(1, 32) %}<option value="{{ d }}" {% if selected_day == d %}selected{% endif %}>{{ d }}日</option>{% endfor %}</select>
+            </form>
+        </div>
+
+        <div x-data="{ openUpload: false }" class="border-t border-gray-100 pt-4">
+            <button @click="openUpload = !openUpload" class="flex items-center gap-2 text-sm text-green-600 font-medium hover:text-green-800 transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                <span>批量导入账单</span>
+            </button>
+            <div x-show="openUpload" style="display: none;" class="mt-4 bg-green-50/50 p-4 rounded-lg border border-green-100">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                    <div class="mb-4">
+                        {% for category, message in messages %}
+                        <div class="text-xs p-2 rounded border {{ 'bg-red-50 text-red-700 border-red-200' if category == 'error' else 'bg-green-50 text-green-700' }}">
+                            {{ message | safe }}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                {% endwith %}
+
+                <form action="/settlement/upload" method="POST" enctype="multipart/form-data" class="flex flex-col md:flex-row items-end gap-4">
+                    <div class="flex-1">
+                        <label class="block text-xs font-medium text-gray-500 mb-1">数据归属店铺</label>
+                        <select name="shop_name" class="block w-full rounded border-gray-300 shadow-sm text-sm py-2 focus:ring-green-500 focus:border-green-500">
+                            <option value="云企">云企</option>
+                            <option value="鲸画">鲸画</option>
+                            <option value="知己知彼">知己知彼</option>
+                            <option value="鼎银">鼎银</option>
+                            <option value="德勤">德勤</option>
+                            <option value="淘小铺">淘小铺</option>
+                            <option value="维鲸">维鲸</option>
+                            <option value="点小饿">点小饿</option>
+                            <option value="扶风">扶风</option>
+                        </select>
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-xs font-medium text-gray-500 mb-1">选择文件 (支持 .xlsx, .csv 批量)</label>
+                        <input type="file" name="file" multiple accept=".xlsx, .xls, .csv" class="block w-full text-xs text-gray-500 border border-dashed border-green-300 p-1.5" />
+                    </div>
+                    <button type="submit" class="bg-green-600 text-white px-6 py-2 rounded text-sm font-medium hover:bg-green-700 transition h-10">
+                        确认上传
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex flex-col">
+            <h3 class="font-bold text-gray-800 mb-4 text-xs flex items-center gap-2 uppercase tracking-wider"><span class="w-2 h-2 bg-green-500 rounded-full"></span> 结算趋势</h3>
+            <div class="flex-1 min-h-[160px]"><canvas id="settleTrendChart"></canvas></div>
+        </div>
+        <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex flex-col">
+            <h3 class="font-bold text-gray-800 mb-4 text-xs flex items-center gap-2 uppercase tracking-wider"><span class="w-2 h-2 bg-orange-500 rounded-full"></span> 资金构成</h3>
+            <div class="flex-1 min-h-[160px] flex items-center justify-center"><canvas id="settlePieChart"></canvas></div>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-100 bg-gray-50/50"><h3 class="font-bold text-gray-800">结算明细总表</h3></div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50 text-[11px] text-gray-500 uppercase tracking-wider">
+                    <tr>
+                        <th rowspan="2" class="px-3 py-3 text-left border-r sticky left-0 bg-gray-50 z-10 shadow-sm">日期</th>
+                        <th colspan="6" class="px-2 py-1 text-center border-r bg-blue-50/30 text-blue-800 font-bold">发货</th>
+                        <th class="px-2 py-1 text-center border-r bg-yellow-50/30 text-yellow-800 font-bold">广告</th>
+                        <th colspan="9" class="px-2 py-1 text-center border-r bg-green-50/30 text-green-800 font-bold">结算</th>
+                        <th colspan="2" class="px-2 py-1 text-center border-r bg-purple-50/30 text-purple-800 font-bold">结果</th>
+                        <th rowspan="2" class="px-3 py-3 text-center">操作</th>
+                    </tr>
+                    <tr>
+                        <th class="px-2 py-2 text-right bg-blue-50/10 whitespace-nowrap">发货数</th>
+                        <th class="px-2 py-2 text-right bg-blue-50/10 whitespace-nowrap">申报价</th>
+                        <th class="px-2 py-2 text-right bg-blue-50/10 whitespace-nowrap">活动价</th>
+                        <th class="px-2 py-2 text-right bg-blue-50/10 text-gray-400 whitespace-nowrap">折扣</th>
+                        <th class="px-2 py-2 text-right bg-blue-50/10 whitespace-nowrap">成本</th>
+                        <th class="px-2 py-2 text-right bg-blue-50/10 whitespace-nowrap">揽收</th>
+                        <th class="px-2 py-2 text-right bg-yellow-50/10 text-yellow-700 whitespace-nowrap">广告花费</th>
+                        <th class="px-2 py-2 text-right bg-green-50/10 whitespace-nowrap">单数</th>
+                        <th class="px-2 py-2 text-right bg-green-50/10 text-gray-400 whitespace-nowrap">比例</th>
+                        <th class="px-2 py-2 text-right bg-green-50/10 font-bold text-green-700 whitespace-nowrap">结算金额</th>
+                        <th class="px-2 py-2 text-right bg-green-50/10 text-gray-400 whitespace-nowrap">折扣</th>
+                        <th class="px-2 py-2 text-right bg-green-50/10 text-gray-400 whitespace-nowrap">进度</th>
+                        <th class="px-2 py-2 text-right bg-green-50/10 text-red-500 whitespace-nowrap">退款</th>
+                        <th class="px-2 py-2 text-right bg-green-50/10 text-green-600 whitespace-nowrap">补贴</th>
+                        <th class="px-2 py-2 text-right bg-green-50/10 text-red-500 whitespace-nowrap">赔付</th>
+                        <th class="px-2 py-2 text-right bg-green-50/10 text-red-500 whitespace-nowrap">罚款</th>
+                        <th class="px-2 py-2 text-right bg-purple-50/10 font-bold text-indigo-700 whitespace-nowrap">毛利</th>
+                        <th class="px-2 py-2 text-right bg-purple-50/10 font-bold whitespace-nowrap">投产比</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-100 text-xs">
+                    {% for row in report_data %}
+                    <tr class="hover:bg-gray-50 transition-colors {{ 'bg-gray-50 font-bold' if row.get('is_summary') else '' }}">
+                        <td class="px-3 py-3 font-bold sticky left-0 bg-white shadow-sm whitespace-nowrap text-gray-900">{{ row.date }}</td>
+                        <td class="px-2 py-3 text-right text-gray-500">{{ row.ship_qty }}</td>
+                        <td class="px-2 py-3 text-right text-gray-500">¥{{ "{:,.2f}".format(row.ship_declared) }}</td>
+                        <td class="px-2 py-3 text-right text-gray-500">¥{{ "{:,.2f}".format(row.activity_price) }}</td>
+                        <td class="px-2 py-3 text-right text-gray-400">{{ "{:,.2f}".format(row.activity_discount * 100) }}%</td>
+                        <td class="px-2 py-3 text-right text-gray-500">¥{{ "{:,.2f}".format(row.ship_cost) }}</td>
+                        <td class="px-2 py-3 text-right text-gray-500">¥{{ "{:,.2f}".format(row.service_fee) }}</td>
+                        <td class="px-2 py-3 text-right bg-yellow-50/20 text-yellow-700 font-medium">¥{{ "{:,.2f}".format(row.ad_cost) }}</td>
+                        <td class="px-2 py-3 text-right text-gray-600">{{ row.settle_count }}</td>
+                        <td class="px-2 py-3 text-right text-gray-400">{{ "{:,.2f}".format(row.settle_count_ratio * 100) }}%</td>
+                        <td class="px-2 py-3 text-right font-bold text-green-600">¥{{ "{:,.2f}".format(row.settle_amount) }}</td>
+                        <td class="px-2 py-3 text-right text-gray-400">{{ "{:,.2f}".format(row.settle_amount_discount * 100) }}%</td>
+                        <td class="px-2 py-3 text-right text-gray-400">{{ "{:,.2f}".format(row.settle_amount_progress * 100) }}%</td>
+                        <td class="px-2 py-3 text-right text-red-400">¥{{ "{:,.2f}".format(row.consumer_refund) }}</td>
+                        <td class="px-2 py-3 text-right text-green-600">¥{{ "{:,.2f}".format(row.subsidy) }}</td>
+                        <td class="px-2 py-3 text-right text-red-400">¥{{ "{:,.2f}".format(row.after_sales_fine) }}</td>
+                        <td class="px-2 py-3 text-right text-red-400 bg-red-50/10">¥{{ "{:,.2f}".format(row.delivery_fine) }}</td>
+                        <td class="px-2 py-3 text-right font-bold text-indigo-700 bg-purple-50/5">¥{{ "{:,.2f}".format(row.gross_profit) }}</td>
+                        <td class="px-2 py-3 text-right font-bold bg-purple-50/5">{{ "{:,.2f}".format(row.roi * 100) }}%</td>
+                        <td class="px-3 py-3 text-center whitespace-nowrap">
+                            {% if not row.get('is_summary') and current_shop != '所有店铺' and selected_month %}
+                            <button @click="showModal = true; editDate = '{{ row.date }}'; editFine = {{ row.delivery_fine }}" class="text-blue-600 hover:underline">补录</button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="20" class="px-6 py-12 text-center text-gray-400">暂无数据</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if pagination and pagination.pages > 1 %}
+        <div class="bg-gray-50 px-6 py-3 border-t border-gray-200 flex items-center justify-between">
+            {% if pagination.has_prev %}<a href="{{ url_for('settlement', page=pagination.prev_num, shop_name=current_shop, year=selected_year, month=selected_month, day=selected_day) }}" class="px-3 py-1.5 bg-white border rounded text-sm hover:bg-gray-50">上一页</a>{% endif %}
+            <span class="text-xs text-gray-500 font-medium">第 {{ pagination.page }} / {{ pagination.pages }} 页</span>
+            {% if pagination.has_next %}<a href="{{ url_for('settlement', page=pagination.next_num, shop_name=current_shop, year=selected_year, month=selected_month, day=selected_day) }}" class="px-3 py-1.5 bg-white border rounded text-sm hover:bg-gray-50">下一页</a>{% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mt-6">
+        <div class="px-6 py-3 border-b border-gray-100 bg-gray-50"><h3 class="font-bold text-xs text-gray-500 uppercase">经营分析</h3></div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 text-xs">
+                <thead class="bg-gray-50 text-[10px] text-gray-400 uppercase">
+                    <tr>
+                        <th class="px-4 py-2 text-left">日期</th><th class="px-2 py-2 text-right">申报客单</th><th class="px-2 py-2 text-right">毛利客单</th><th class="px-2 py-2 text-right">折差</th><th class="px-2 py-2 text-right">退款率</th><th class="px-2 py-2 text-right">赔付率</th><th class="px-2 py-2 text-right">罚款率</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-100">
+                    {% for row in report_data %}
+                    <tr class="hover:bg-gray-50 {{ 'bg-gray-100 font-bold' if row.get('is_summary') else '' }}">
+                        <td class="px-4 py-2 text-gray-900">{{ row.date }}</td>
+                        <td class="px-2 py-2 text-right text-gray-600">¥{{ "{:,.2f}".format(row.declared_per_ticket) }}</td>
+                        <td class="px-2 py-2 text-right text-indigo-600">¥{{ "{:,.2f}".format(row.profit_per_ticket) }}</td>
+                        <td class="px-2 py-2 text-right {{ 'text-red-500' if row.discount_diff < 0 else 'text-green-600' }}">{{ "{:,.2f}".format(row.discount_diff * 100) }}%</td>
+                        <td class="px-2 py-2 text-right text-gray-600">{{ "{:,.2f}".format(row.refund_rate * 100) }}%</td>
+                        <td class="px-2 py-2 text-right text-gray-600">{{ "{:,.2f}".format(row.after_sales_rate * 100) }}%</td>
+                        <td class="px-2 py-2 text-right text-gray-600">{{ "{:,.2f}".format(row.delivery_fine_rate * 100) }}%</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="7" class="px-6 py-8 text-center text-gray-400">暂无数据</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div x-show="showModal" class="fixed inset-0 z-50 overflow-y-auto" style="display: none;">
+        <div class="flex items-center justify-center min-h-screen px-4">
+            <div class="fixed inset-0 bg-gray-900 bg-opacity-50 transition-opacity backdrop-blur-sm" @click="showModal = false"></div>
+            <div class="bg-white rounded-xl shadow-2xl transform transition-all sm:max-w-sm w-full p-6 relative z-10">
+                <div class="flex justify-between items-center mb-5"><h3 class="text-lg font-bold text-gray-900">补录发货罚款 <span class="text-xs text-gray-500">({{ current_shop }})</span></h3><button @click="showModal = false" class="text-gray-400 hover:text-gray-500">X</button></div>
+                <div class="space-y-4"><div><label class="block text-sm font-medium text-gray-700 mb-1">罚款金额 (¥)</label><input type="number" step="0.01" x-model="editFine" class="block w-full border-gray-300 rounded-md focus:ring-green-500 focus:border-green-500 sm:text-sm py-2 px-3 border"></div></div>
+                <div class="mt-6 flex justify-end gap-3 pt-4 border-t border-gray-100"><button @click="showModal = false" class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 text-sm font-medium">取消</button><button @click="saveFine(editDate, editFine, currentShop)" class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-medium">保存</button></div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+    const trendDates = {{ trend_dates | tojson }}; const trendIncome = {{ trend_income | tojson }}; const pieData = {{ pie_data | tojson }};
+    if (document.getElementById('settleTrendChart')) { new Chart(document.getElementById('settleTrendChart'), { type: 'line', data: { labels: trendDates, datasets: [{ label: '结算金额', data: trendIncome, borderColor: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.1)', fill: true, tension: 0.4 }] }, options: { responsive: true, maintainAspectRatio: false, scales: { x: { display: false }, y: { display: false } }, plugins: { legend: { display: false } } } }); }
+    if (document.getElementById('settlePieChart')) { new Chart(document.getElementById('settlePieChart'), { type: 'doughnut', data: { labels: ['总收入', '退款(负)', '罚款(负)'], datasets: [{ data: pieData, backgroundColor: ['#10b981', '#ef4444', '#f59e0b'], borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { display: false } } } }); }
+    async function saveFine(date, fine, shopName) { if(!date) return; try { const res = await fetch('/shipment/update_daily', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ date: date, shop_name: shopName, delivery_fine: fine }) }); const data = await res.json(); if(data.status === 'success') location.reload(); else alert(data.msg); } catch(e) { alert('网络错误'); } }
+    </script>
+</div>
+{% endblock %}

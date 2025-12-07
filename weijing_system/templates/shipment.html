@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+
+{% block content %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<div class="space-y-8" x-data="{ showModal: false, editDate: '', editActivity: 0, editService: 0, editAd: 0, editCost: 0, currentShop: '{{ current_shop }}' }">
+
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 space-y-4">
+        <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+            <div><h2 class="text-xl font-bold text-gray-800 tracking-tight">发货数据分析</h2><p class="text-sm text-gray-500 mt-1">查看各店铺的发货量、成本与毛利估算</p></div>
+            <form method="GET" action="/shipment" class="flex flex-wrap items-center gap-2 bg-blue-50 p-2 rounded-lg border border-blue-100">
+                <label class="text-xs font-bold text-blue-600 uppercase tracking-wide px-1">店铺:</label>
+                <select name="shop_name" onchange="this.form.submit()" class="bg-white border-none text-xs font-medium text-gray-700 rounded shadow-sm focus:ring-1 focus:ring-blue-500 py-1 pl-2 pr-6 cursor-pointer h-8">
+                    <option value="所有店铺" {% if current_shop == '所有店铺' %}selected{% endif %}>所有店铺</option>
+                    <option value="云企" {% if current_shop == '云企' %}selected{% endif %}>云企</option>
+                    <option value="鲸画" {% if current_shop == '鲸画' %}selected{% endif %}>鲸画</option>
+                    <option value="知己知彼" {% if current_shop == '知己知彼' %}selected{% endif %}>知己知彼</option>
+                    <option value="鼎银" {% if current_shop == '鼎银' %}selected{% endif %}>鼎银</option>
+                    <option value="德勤" {% if current_shop == '德勤' %}selected{% endif %}>德勤</option>
+                    <option value="淘小铺" {% if current_shop == '淘小铺' %}selected{% endif %}>淘小铺</option>
+                    <option value="维鲸" {% if current_shop == '维鲸' %}selected{% endif %}>维鲸</option>
+                    <option value="点小饿" {% if current_shop == '点小饿' %}selected{% endif %}>点小饿</option>
+                    <option value="扶风" {% if current_shop == '扶风' %}selected{% endif %}>扶风</option>
+                </select>
+                <div class="w-px h-4 bg-blue-200 mx-1"></div>
+                <select name="year" onchange="this.form.submit()" class="bg-white border-none text-xs font-medium text-gray-700 rounded shadow-sm focus:ring-1 focus:ring-blue-500 py-1 pl-2 pr-6 cursor-pointer h-8">{% for y in range(2023, 2026) %}<option value="{{ y }}" {% if selected_year == y %}selected{% endif %}>{{ y }}年</option>{% endfor %}</select>
+                <select name="month" onchange="this.form.submit()" class="bg-white border-none text-xs font-medium text-gray-700 rounded shadow-sm focus:ring-1 focus:ring-blue-500 py-1 pl-2 pr-6 cursor-pointer h-8"><option value="0" {% if not selected_month %}selected{% endif %}>全年</option>{% for m in range(1, 13) %}<option value="{{ m }}" {% if selected_month == m %}selected{% endif %}>{{ m }}月</option>{% endfor %}</select>
+                <select name="day" onchange="this.form.submit()" class="bg-white border-none text-xs font-medium text-gray-700 rounded shadow-sm focus:ring-1 focus:ring-blue-500 py-1 pl-2 pr-6 cursor-pointer h-8"><option value="0" {% if not selected_day %}selected{% endif %}>整月</option>{% for d in range(1, 32) %}<option value="{{ d }}" {% if selected_day == d %}selected{% endif %}>{{ d }}日</option>{% endfor %}</select>
+            </form>
+        </div>
+        <div x-data="{ openUpload: false }" class="border-t border-gray-100 pt-4">
+            <button @click="openUpload = !openUpload" class="flex items-center gap-2 text-sm text-blue-600 font-medium hover:text-blue-800 transition"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg><span>批量导入发货单</span></button>
+            <div x-show="openUpload" style="display: none;" class="mt-4 bg-blue-50/50 p-4 rounded-lg border border-blue-100">
+                <form action="/shipment/upload" method="POST" enctype="multipart/form-data" class="flex flex-col md:flex-row items-end gap-4">
+                    <div class="flex-1"><label class="block text-xs font-medium text-gray-500 mb-1">数据归属店铺</label><select name="shop_name" class="block w-full rounded border-gray-300 shadow-sm text-sm py-2"><option value="云企">云企</option><option value="鲸画">鲸画</option><option value="知己知彼">知己知彼</option><option value="鼎银">鼎银</option><option value="德勤">德勤</option><option value="淘小铺">淘小铺</option><option value="维鲸">维鲸</option><option value="点小饿">点小饿</option><option value="扶风">扶风</option></select></div>
+                    <div class="flex-1"><label class="block text-xs font-medium text-gray-500 mb-1">选择 Excel 文件 (支持多选)</label><input type="file" name="file" multiple accept=".xlsx, .xls, .csv" class="block w-full text-xs text-gray-500 file:mr-2 file:py-2 file:px-4 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200 cursor-pointer border border-dashed border-blue-300 p-1.5" /></div>
+                    <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded text-sm font-medium hover:bg-blue-700 transition h-10">确认上传</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col"><h3 class="font-bold text-gray-800 mb-4 text-sm flex items-center gap-2"><span class="w-1 h-4 bg-blue-500 rounded-full"></span>{{ current_shop }} - 发货趋势</h3><div class="flex-1 min-h-[160px]"><canvas id="shipTrendChart"></canvas></div></div>
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col"><h3 class="font-bold text-gray-800 mb-4 text-sm flex items-center gap-2"><span class="w-1 h-4 bg-purple-500 rounded-full"></span>店铺占比</h3><div class="flex-1 min-h-[160px] flex items-center justify-center"><canvas id="shipDistChart"></canvas></div></div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50"><h3 class="font-bold text-gray-700">每日明细数据</h3></div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50 text-[11px] text-gray-500 uppercase tracking-wider">
+                    <tr>
+                        <th class="px-4 py-3 text-left font-semibold whitespace-nowrap border-r sticky left-0 bg-gray-50 shadow-sm">日期</th>
+                        <th class="px-2 py-3 text-right font-semibold whitespace-nowrap">总发货件数</th>
+                        <th class="px-2 py-3 text-right font-semibold whitespace-nowrap">平销申报价</th>
+                        <th class="px-2 py-3 text-right font-semibold whitespace-nowrap">出库成本</th>
+                        <th class="px-2 py-3 text-right font-semibold whitespace-nowrap bg-yellow-50/50">预估揽收</th>
+                        <th class="px-2 py-3 text-right font-semibold whitespace-nowrap bg-yellow-50/50">广告花费</th>
+                        <th class="px-2 py-3 text-right font-semibold whitespace-nowrap text-red-500">平台罚款</th>
+                        <th class="px-2 py-3 text-right font-semibold whitespace-nowrap text-red-500">售后退款</th>
+                        <th class="px-2 py-3 text-right font-semibold whitespace-nowrap bg-yellow-50/50">活动折扣价</th>
+                        <th class="px-2 py-3 text-right font-bold whitespace-nowrap text-green-600 bg-green-50/10">毛利</th>
+                        <th class="px-2 py-3 text-right font-semibold whitespace-nowrap">投产比</th>
+                        <th class="px-4 py-3 text-center font-semibold whitespace-nowrap">操作</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-100 text-xs">
+                    {% for row in daily_data %}
+                    <tr class="hover:bg-blue-50/30 transition-colors {{ 'bg-gray-50 font-bold' if row.get('is_summary') else '' }}">
+                        <td class="px-4 py-3 whitespace-nowrap font-medium text-gray-900 sticky left-0 bg-white shadow-sm">
+                            {{ row.date }}
+                            {% if not row.get('is_summary') and selected_month %}<span class="text-xs text-gray-400 ml-1">({{ row.date.strftime('%a') }})</span>{% endif %}
+                        </td>
+                        <td class="px-2 py-3 text-right text-blue-600">{{ row.total_quantity }}</td>
+                        <td class="px-2 py-3 text-right text-gray-500">¥{{ "{:,.2f}".format(row.total_declared) }}</td>
+                        <td class="px-2 py-3 text-right text-gray-500">¥{{ "{:,.2f}".format(row.total_cost) }}</td>
+                        <td class="px-2 py-3 text-right bg-yellow-50/30">¥{{ "{:,.2f}".format(row.total_service) }}</td>
+                        <td class="px-2 py-3 text-right bg-yellow-50/30">¥{{ "{:,.2f}".format(row.total_ad) }}</td>
+                        <td class="px-2 py-3 text-right text-red-400">¥{{ "{:,.2f}".format(row.total_fine) }}</td>
+                        <td class="px-2 py-3 text-right text-red-400">¥{{ "{:,.2f}".format(row.total_refund) }}</td>
+                        <td class="px-2 py-3 text-right bg-yellow-50/30">¥{{ "{:,.2f}".format(row.total_activity) }}</td>
+                        <td class="px-2 py-3 text-right text-green-600 bg-green-50/10">¥{{ "{:,.2f}".format(row.gross_profit) }}</td>
+                        <td class="px-2 py-3 text-right font-mono">{{ "{:,.2f}".format(row.roi * 100) }}%</td>
+                        <td class="px-4 py-3 text-center">
+                            {% if not row.get('is_summary') and current_shop != '所有店铺' and selected_month %}
+                            <button @click="showModal = true; editDate = '{{ row.date }}'; editActivity = {{ row.total_activity }}; editService = {{ row.total_service }}; editAd = {{ row.total_ad }}; editCost = {{ row.total_cost }}" 
+                                    class="text-blue-600 hover:underline">编辑</button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="12" class="px-6 py-16 text-center text-gray-400">暂无数据</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if pagination and pagination.pages > 1 %}
+        <div class="bg-gray-50 px-6 py-3 border-t border-gray-200 flex items-center justify-between">
+            {% if pagination.has_prev %}<a href="{{ url_for('shipment', page=pagination.prev_num, shop_name=current_shop, year=selected_year, month=selected_month, day=selected_day) }}" class="px-3 py-1.5 bg-white border rounded text-sm hover:bg-gray-50">上一页</a>{% endif %}
+            <span class="text-xs text-gray-500 font-medium">第 {{ pagination.page }} / {{ pagination.pages }} 页</span>
+            {% if pagination.has_next %}<a href="{{ url_for('shipment', page=pagination.next_num, shop_name=current_shop, year=selected_year, month=selected_month, day=selected_day) }}" class="px-3 py-1.5 bg-white border rounded text-sm hover:bg-gray-50">下一页</a>{% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mt-6">
+        <div class="px-6 py-4 border-b border-gray-100 bg-gray-50/50"><h3 class="font-bold text-gray-800">发货数据分析</h3></div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 text-xs">
+                <thead class="bg-gray-50 text-[11px] text-gray-500 uppercase tracking-wider">
+                    <tr>
+                        <th class="px-4 py-3 text-left font-semibold">日期</th><th class="px-2 py-3 text-right font-semibold">申报客单价</th><th class="px-2 py-3 text-right font-semibold">毛利客单价</th><th class="px-2 py-3 text-right font-semibold">售后率</th><th class="px-2 py-3 text-right font-semibold">广告占销比</th><th class="px-2 py-3 text-right font-semibold">广告利润比</th><th class="px-2 py-3 text-right font-semibold">成本销售比</th><th class="px-2 py-3 text-right font-semibold">销售利润率</th><th class="px-2 py-3 text-right font-semibold">实际折率</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-100">
+                    {% for row in daily_data %}
+                    <tr class="hover:bg-gray-50 transition-colors {{ 'bg-gray-50 font-bold' if row.get('is_summary') else '' }}">
+                        <td class="px-4 py-3 font-medium text-gray-900 sticky left-0 bg-white shadow-sm">{{ row.date }}</td>
+                        <td class="px-2 py-3 text-right text-gray-600">¥{{ "{:,.2f}".format(row.declared_per_ticket) }}</td>
+                        <td class="px-2 py-3 text-right text-indigo-600">¥{{ "{:,.2f}".format(row.profit_per_ticket) }}</td>
+                        <td class="px-2 py-3 text-right text-gray-600">{{ "{:,.2f}".format(row.refund_rate * 100) }}%</td>
+                        <td class="px-2 py-3 text-right text-gray-600">{{ "{:,.2f}".format(row.ad_sales_ratio * 100) }}%</td>
+                        <td class="px-2 py-3 text-right text-gray-600">{{ "{:,.2f}".format(row.ad_profit_ratio * 100) }}%</td>
+                        <td class="px-2 py-3 text-right text-gray-600">{{ "{:,.2f}".format(row.cost_sales_ratio * 100) }}%</td>
+                        <td class="px-2 py-3 text-right text-gray-600">{{ "{:,.2f}".format(row.sales_profit_rate * 100) }}%</td>
+                        <td class="px-2 py-3 text-right text-gray-600">{{ "{:,.2f}".format(row.actual_discount_rate) }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="9" class="px-6 py-8 text-center text-gray-400">暂无分析数据</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div x-show="showModal" class="fixed inset-0 z-50 overflow-y-auto" style="display: none;">
+        <div class="flex items-center justify-center min-h-screen px-4">
+            <div class="fixed inset-0 bg-gray-900 bg-opacity-50 transition-opacity backdrop-blur-sm" @click="showModal = false"></div>
+            <div class="bg-white rounded-xl shadow-2xl transform transition-all sm:max-w-md w-full p-6 relative z-10">
+                <div class="flex justify-between items-center mb-5"><h3 class="text-lg font-bold text-gray-900">编辑每日数据 <span class="text-xs font-normal text-gray-500">({{ current_shop }})</span></h3><button @click="showModal = false">X</button></div>
+                <div class="space-y-4">
+                    <div><label class="block text-xs text-gray-500">出库成本 (修正值)</label><input type="number" step="0.01" x-model="editCost" class="block w-full border rounded p-2"></div>
+                    <div><label class="block text-xs text-gray-500">活动折扣价</label><input type="number" step="0.01" x-model="editActivity" class="block w-full border rounded p-2"></div>
+                    <div><label class="block text-xs text-gray-500">预估揽收服务费</label><input type="number" step="0.01" x-model="editService" class="block w-full border rounded p-2"></div>
+                    <div><label class="block text-xs text-gray-500">当日广告花费</label><input type="number" step="0.01" x-model="editAd" class="block w-full border rounded p-2"></div>
+                </div>
+                <div class="mt-6 flex justify-end gap-3"><button @click="showModal = false" class="px-4 py-2 border rounded">取消</button><button @click="saveDailyData(editDate, editActivity, editService, editAd, editCost, currentShop)" class="px-4 py-2 bg-blue-600 text-white rounded">保存</button></div>
+            </div>
+        </div>
+    </div>
+    <script>/* JS 保持原样 */
+    const trendDates = {{ trend_dates | tojson }}; const trendValues = {{ trend_values | tojson }}; const shopLabels = {{ shop_labels | tojson }}; const shopValues = {{ shop_values | tojson }};
+    if (document.getElementById('shipTrendChart')) { new Chart(document.getElementById('shipTrendChart'), { type: 'bar', data: { labels: trendDates, datasets: [{ label: '发货量', data: trendValues, backgroundColor: '#3b82f6', borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, scales: { x: { display: false }, y: { display: false } }, plugins: { legend: { display: false } } } }); }
+    if (document.getElementById('shipDistChart')) { new Chart(document.getElementById('shipDistChart'), { type: 'doughnut', data: { labels: shopLabels, datasets: [{ data: shopValues, backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'], borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { display: false } } } }); }
+    async function saveDailyData(date, activity, service, ad, cost, shopName) { if (!date) return; try { const res = await fetch('/shipment/update_daily', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date, shop_name: shopName, total_activity: activity, total_service: service, total_ad: ad, total_cost: cost }) }); const data = await res.json(); if (data.status === 'success') location.reload(); else alert(data.msg); } catch (e) { alert('网络请求失败'); } }
+    </script>
+</div>
+{% endblock %}

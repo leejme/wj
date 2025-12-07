@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+
+{% block content %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<div class="space-y-8 pb-12">
+    
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900 tracking-tight">运营数据驾驶舱</h1>
+            <p class="text-sm text-gray-500 mt-1">实时监控发货进度与财务结算状况</p>
+        </div>
+        
+        <div class="bg-white p-2 rounded-lg shadow-sm border border-gray-100">
+            <form method="GET" action="/" class="flex items-center gap-2">
+                <input type="date" name="start_date" value="{{ start_date }}" class="text-xs border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500 py-1.5">
+                <span class="text-gray-400">-</span>
+                <input type="date" name="end_date" value="{{ end_date }}" class="text-xs border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500 py-1.5">
+                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white p-1.5 rounded transition shadow-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow relative overflow-hidden">
+            <div class="absolute right-0 top-0 w-24 h-24 bg-purple-50 rounded-full -mr-8 -mt-8"></div>
+            <div class="relative">
+                <p class="text-gray-500 text-sm font-medium">今日活动价</p>
+                <h3 class="text-2xl font-bold text-gray-800 mt-2">¥{{ "{:,.0f}".format(today_activity) }}</h3>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow relative overflow-hidden">
+            <div class="absolute right-0 top-0 w-24 h-24 bg-blue-50 rounded-full -mr-8 -mt-8"></div>
+            <div class="relative">
+                <p class="text-gray-500 text-sm font-medium">今日订单量</p>
+                <h3 class="text-2xl font-bold text-gray-800 mt-2">{{ today_orders }} <span class="text-sm font-normal text-gray-400">单</span></h3>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow relative overflow-hidden">
+            <div class="absolute right-0 top-0 w-24 h-24 bg-green-50 rounded-full -mr-8 -mt-8"></div>
+            <div class="relative">
+                <p class="text-gray-500 text-sm font-medium">今日结算金额</p>
+                <h3 class="text-2xl font-bold text-green-600 mt-2">¥{{ "{:,.0f}".format(today_settlement) }}</h3>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow relative overflow-hidden cursor-pointer group" onclick="window.location.href='/settlement'">
+            <div class="absolute right-0 top-0 w-24 h-24 bg-orange-50 rounded-full -mr-8 -mt-8 group-hover:scale-110 transition-transform"></div>
+            <div class="relative">
+                <p class="text-gray-500 text-sm font-medium">待结算金额 (预估)</p>
+                <h3 class="text-2xl font-bold text-orange-500 mt-2">¥{{ "{:,.0f}".format(total_pending) }}</h3>
+            </div>
+        </div>
+    </div>
+
+    <div class="space-y-6">
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2"><span class="w-1 h-5 bg-blue-600 rounded-full"></span>发货量趋势</h3>
+            </div>
+            <div class="h-72"><canvas id="shipTrendChart"></canvas></div>
+        </div>
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2"><span class="w-1 h-5 bg-green-600 rounded-full"></span>结算金额趋势</h3>
+            </div>
+            <div class="h-72"><canvas id="settleTrendChart"></canvas></div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 lg:col-span-1">
+            <h3 class="font-bold text-gray-800 mb-4 text-sm uppercase tracking-wide">店铺发货占比</h3>
+            <div class="h-48 flex items-center justify-center"><canvas id="shopDistChart"></canvas></div>
+        </div>
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 lg:col-span-2 border-t-4 border-t-red-500">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="font-bold text-gray-800">最新异常记录</h3>
+                <a href="/settlement" class="text-xs text-blue-500 hover:underline">查看全部</a>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full text-sm">
+                    <thead>
+                        <tr class="text-left text-gray-500 border-b border-gray-100">
+                            <th class="pb-2 font-medium">日期</th>
+                            <th class="pb-2 font-medium">单号/SKU</th>
+                            <th class="pb-2 font-medium">类型</th>
+                            <th class="pb-2 text-right font-medium">金额</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-50">
+                        {% for item in alert_list %}
+                        <tr>
+                            <td class="py-2 text-gray-500 text-xs">{{ item.account_date }}</td>
+                            <td class="py-2 text-gray-800 font-mono text-xs">{{ item.order_no or item.sku_id }}</td>
+                            <td class="py-2"><span class="text-xs text-red-500 bg-red-50 px-2 py-0.5 rounded">{{ item.trans_type }}</span></td>
+                            <td class="py-2 text-right text-red-600 font-bold text-xs">-{{ item.amount }}</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="4" class="py-4 text-center text-gray-400 text-xs">暂无异常数据</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const chartDates = {{ chart_dates | tojson }};
+    const chartShipments = {{ chart_shipments | tojson }};
+    const chartSettlements = {{ chart_settlements | tojson }};
+    const shopLabels = {{ shop_labels | tojson }};
+    const shopData = {{ shop_data | tojson }};
+
+    new Chart(document.getElementById('shipTrendChart'), {
+        type: 'line',
+        data: {
+            labels: chartDates,
+            datasets: [{
+                label: '发货单数',
+                data: chartShipments,
+                borderColor: '#2563eb',
+                backgroundColor: (ctx) => {
+                    const gradient = ctx.chart.ctx.createLinearGradient(0, 0, 0, 300);
+                    gradient.addColorStop(0, 'rgba(37, 99, 235, 0.2)');
+                    gradient.addColorStop(1, 'rgba(37, 99, 235, 0.0)');
+                    return gradient;
+                },
+                fill: true, tension: 0.4, pointRadius: 3
+            }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, scales: { x: { display: false }, y: { grid: { borderDash: [4, 4], color: '#f3f4f6' }, beginAtZero: true } }, plugins: { legend: { display: false } } }
+    });
+
+    new Chart(document.getElementById('settleTrendChart'), {
+        type: 'line',
+        data: {
+            labels: chartDates,
+            datasets: [{
+                label: '结算金额 (¥)',
+                data: chartSettlements,
+                borderColor: '#10b981',
+                backgroundColor: (ctx) => {
+                    const gradient = ctx.chart.ctx.createLinearGradient(0, 0, 0, 300);
+                    gradient.addColorStop(0, 'rgba(16, 185, 129, 0.2)');
+                    gradient.addColorStop(1, 'rgba(16, 185, 129, 0.0)');
+                    return gradient;
+                },
+                fill: true, tension: 0.4, pointRadius: 3
+            }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, scales: { x: { display: false }, y: { grid: { borderDash: [4, 4], color: '#f3f4f6' } } }, plugins: { legend: { display: false } } }
+    });
+
+    new Chart(document.getElementById('shopDistChart'), {
+        type: 'doughnut',
+        data: {
+            labels: shopLabels,
+            datasets: [{ data: shopData, backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#6366f1'], borderWidth: 0 }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { display: false } } }
+    });
+</script>
+{% endblock %}

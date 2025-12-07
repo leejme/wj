@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row items-center justify-between gap-4">
+        <div>
+            <h2 class="text-xl font-bold text-gray-800 tracking-tight">文件上传管理</h2>
+            <p class="text-sm text-gray-500 mt-1">查看历史上传记录，或撤销错误上传的数据</p>
+        </div>
+        <div class="flex gap-2">
+            <a href="/shipment" class="bg-blue-50 text-blue-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-100 transition">去发货上传</a>
+            <a href="/settlement" class="bg-green-50 text-green-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-100 transition">去结算上传</a>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
+                    <tr>
+                        <th class="px-6 py-3 text-left font-semibold">上传时间</th>
+                        <th class="px-6 py-3 text-left font-semibold">文件名</th>
+                        <th class="px-6 py-3 text-left font-semibold">归属店铺</th>
+                        <th class="px-6 py-3 text-left font-semibold">类型</th>
+                        <th class="px-6 py-3 text-right font-semibold">包含数据(条)</th>
+                        <th class="px-6 py-3 text-center font-semibold">操作</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-100 text-sm">
+                    {% for record in records %}
+                    <tr class="hover:bg-gray-50 transition-colors" id="record-{{ record.id }}">
+                        <td class="px-6 py-4 whitespace-nowrap text-gray-500 font-mono text-xs">
+                            {{ record.upload_date.strftime('%Y-%m-%d %H:%M:%S') }}
+                        </td>
+                        <td class="px-6 py-4 text-gray-900 font-medium max-w-xs truncate" title="{{ record.filename }}">
+                            {{ record.filename }}
+                        </td>
+                        <td class="px-6 py-4">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                {{ record.shop_name }}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4">
+                            {% if record.upload_type == 'shipment' %}
+                            <span class="text-blue-600 bg-blue-50 px-2 py-0.5 rounded text-xs">发货明细</span>
+                            {% else %}
+                            <span class="text-green-600 bg-green-50 px-2 py-0.5 rounded text-xs">结算明细</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 text-right text-gray-600 font-mono">
+                            {{ record.row_count }}
+                        </td>
+                        <td class="px-6 py-4 text-center">
+                            <button onclick="deleteFile({{ record.id }}, '{{ record.filename }}')" 
+                                    class="text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-1.5 rounded text-xs font-medium transition-colors border border-red-200">
+                                撤销 / 删除
+                            </button>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="px-6 py-16 text-center text-gray-400 bg-gray-50/30">
+                            暂无上传记录
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    async function deleteFile(id, name) {
+        if (!confirm(`⚠️ 危险操作确认\n\n确定要撤销文件 "${name}" 吗？\n\n这将永久删除该文件包含的所有 ${id} 条数据！`)) return;
+        
+        try {
+            const res = await fetch(`/files/delete/${id}`, { method: 'POST' });
+            const data = await res.json();
+            
+            if (data.status === 'success') {
+                alert(data.msg);
+                // 移除行效果
+                const row = document.getElementById(`record-${id}`);
+                row.style.backgroundColor = '#fee2e2'; // red-100
+                setTimeout(() => row.remove(), 500);
+            } else {
+                alert('删除失败: ' + data.msg);
+            }
+        } catch (e) {
+            alert('网络请求失败');
+        }
+    }
+</script>
+{% endblock %}
